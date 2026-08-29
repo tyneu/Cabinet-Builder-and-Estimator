@@ -382,11 +382,11 @@ body.printing #printPack{display:block}
     <div class="grid g2" style="margin-bottom:8px">
       <div><label>Pull from offcut rack</label><select id="use_offcuts">
         <option value="yes">Yes — use them first</option>
-        <option value="no">No — fresh sheets only</option>
+        <option value="no" selected>No — fresh sheets only</option>
       </select></div>
       <div><label>Log new offcuts</label><select id="log_offcuts">
         <option value="yes">Yes — keep and log</option>
-        <option value="no">No — don't track</option>
+        <option value="no" selected>No — don't track</option>
       </select></div>
     </div>
     <div class="hint">Toe kick always stays with the carcasses. Type fractions the way you read them: <b>34 1/2</b>, <b>3/4</b>, or <b>20.4375</b>. Construction type is recorded but doesn't change parts yet.</div>
@@ -1311,8 +1311,8 @@ function applyInclude(){
   }
 }
 const state={
-  upper:{n:5,cabs:[],gaps:[],divs:[],left:'',right:'',fitL:false,fitR:false,def:{h:'',w:'',d:'18',s:'2',c:'Frameless',sp:'No',ceil:'No',al:'Top'}},
-  lower:{n:0,cabs:[],gaps:[],divs:[],left:'',right:'',fitL:false,fitR:false,def:{h:'',w:'',d:'24',s:'1',i:'Shelves',b:'Yes',c:'Frameless',m:'Overlay',sp:'No',al:'Top'}}
+  upper:{n:5,cabs:[],gaps:[],divs:[],left:'',right:'',fitL:false,fitR:false,def:{h:'',w:'',d:'18',s:'2',c:'Face frame',sp:'No',ceil:'No',al:'Top'}},
+  lower:{n:0,cabs:[],gaps:[],divs:[],left:'',right:'',fitL:false,fitR:false,def:{h:'',w:'',d:'24',s:'1',i:'Shelves',b:'Yes',c:'Face frame',m:'Overlay',sp:'No',al:'Top'}}
 };
 const CFG_SECTIONS={
   'Plywood & saw':['ply_thickness','half_thickness','quarter_thickness','kerf','width_round',
@@ -1338,7 +1338,7 @@ const CFG_KEYS=Object.values(CFG_SECTIONS).flat();
 const STOCK={'3/4':'ply_thickness','1/2':'half_thickness','1/4':'quarter_thickness'};
 const CFG_SELECTS={drawer_side_stock:['3/4','1/2','1/4'],drawer_bottom_stock:['1/2','1/4','3/4'],
   toe_kick_face:['Yes','No'], toe_kick_runner_stock:['3/4','1/2','1/4'],
-  door_panel_stock:['MDF 1/4','MDF 1/2','PF 1/4']};
+  door_panel_stock:['MDF 1/2','MDF 1/4','PF 1/4']};
 const CFG_LISTS={slide_lengths:1};
 /* longest slide that still fits; falls back to the shortest one we own */
 function pickSlide(avail,slides){
@@ -1348,7 +1348,7 @@ function pickSlide(avail,slides){
 }
 const CONSTRUCTIONS=['Frameless','Face frame'];
 const MOUNTS=['Overlay','Flush'];
-const blankCab=()=>({w:'',h:'',d:'',shelves:'',interior:'',back:'',constr:'',mount:'',split:'',dh:[],align:''});
+const blankCab=()=>({w:'',h:'',d:'',shelves:'',interior:'',back:'',constr:'',mount:'',split:'',dh:[],align:'',kick:''});
 const ALIGNS=['Top','Bottom'];
 const INTERIORS=['Shelves','Drawers','Neither'];
 const YESNO=['Yes','No'];
@@ -1596,6 +1596,19 @@ function cabBox(run,i){
   box.append(bot);
 
   if(run==='lower'){
+    /* Which toe kick base this cabinet belongs to. Neighbours sharing a number are
+       built as one frame; left blank the run is sectioned automatically. */
+    const kr=document.createElement('div'); kr.className='cabbot';
+    const kf=document.createElement('div'); kf.className='f';
+    kf.innerHTML='<label>Kick plate</label>';
+    const ks=document.createElement('select');
+    ks.append(new Option('auto',''));
+    for(let k=1;k<=Math.max(1,st.n);k++) ks.append(new Option('base '+k,String(k)));
+    ks.value=c.kick||'';
+    if(c.kick) ks.classList.add('ovr');
+    ks.onchange=()=>{ c.kick=ks.value; ks.classList.toggle('ovr',ks.value!==''); save(); };
+    kf.append(ks); kr.append(kf); box.append(kr);
+
     const br=document.createElement('div'); br.className='cabbot';
     const bf=document.createElement('div'); bf.className='f';
     bf.innerHTML='<label>Back panel</label>';
@@ -1950,10 +1963,33 @@ function toeKickParts(R,cfg){
   const add=(name,a2,b2,qty)=>{const [L,W]=LW(a2,b2);const key=name+'|'+L+'|'+W;
     agg[key]=agg[key]||{cab:'TK',name,mat:'PF 3/4',L,W,qty:0}; agg[key].qty+=qty;};
 
+  /* A segment is further divided wherever the kick plate number changes. Consecutive
+     blanks stay together and get the automatic sectioning; a run of cabinets sharing
+     a number becomes one base, still split if it passes the carry limit. */
+  const kickBlocks=seg=>{
+    const blocks=[]; let cur=null, curKey=null;
+    seg.cabs.forEach((c,i)=>{
+      const key=(c.kick||'')===''?'auto':String(c.kick);
+      if(cur&&key===curKey&&i>0){ cur.gaps.push(seg.gaps[i-1]||0); cur.cabs.push(c); }
+      else{ if(cur) blocks.push(cur); cur={cabs:[c],gaps:[],num:key==='auto'?null:+key}; }
+      curKey=key;
+    });
+    if(cur) blocks.push(cur);
+    return blocks;
+  };
+  const warns=[];
   let secNo=0, runLen=0;
   /* Build a base per segment. An appliance opening between two divides never
      gets a base, and no base ever bridges one. */
-  for(const seg of runSegments(R)){
+  const allBlocks=[];
+  for(const seg of runSegments(R)) allBlocks.push(...kickBlocks(seg));
+  /* One number used in two places can't be a single frame. */
+  const seen={};
+  for(const b of allBlocks) if(b.num!=null) seen[b.num]=(seen[b.num]||0)+1;
+  for(const k of Object.keys(seen).sort((a,b)=>a-b))
+    if(seen[k]>1) warns.push('Kick plate '+k+' is set on cabinets that are not next to each other, '+
+      'so it cannot be one frame. They have been built as '+seen[k]+' separate bases.');
+  for(const seg of allBlocks){
     const edges=[0]; let x=0;
     seg.cabs.forEach((c,i)=>{ x+=c.w; if(i<seg.cabs.length-1) x+=(seg.gaps[i]||0); edges.push(r4(x)); });
     const segLen=edges[edges.length-1];
@@ -1993,12 +2029,14 @@ function toeKickParts(R,cfg){
       if(rungs) add('TK Rung',depth-2*t,innerH,rungs);
       add('TK Runner',len-2*t,cfg.toe_kick_runner_width,2);
       if(faceThk) add('TK Face',len,H,1);
-      info.push({n:secNo,len,rungs,ends:2,mid,cabs:inner.length+1});
+      info.push({n:secNo,len,rungs,ends:2,mid,cabs:inner.length+1,num:seg.num??null,
+                 ids:seg.cabs.map(c=>c.id)});
     }
   }
   for(const k in agg) parts.push(agg[k]);
   const over=info.filter(s=>s.len>M+1e-9);
-  return {parts,secs:info,depth:r4(depth),runLen:r4(runLen),over,innerH:r4(innerH),runThk:r4(runThk)};
+  return {parts,secs:info,depth:r4(depth),runLen:r4(runLen),over,innerH:r4(innerH),
+          runThk:r4(runThk),warns};
 }
 
 /* One frame per run: 2 end stiles, top and bottom rails, and a stile at each intersection.
@@ -2036,6 +2074,14 @@ function faceFrameSeg(run,R,seg,cfg,tag,fit){
     if(W>cfg.stock_width+1e-9) part.wide=true;   // needs ripping from oversized stock
     p.push(part);};
   const splits=seg.cabs.filter(c=>c.split&&(c.w-ff)>cfg.door_two_over+1e-9).length;
+  /* Where every mid stile lands, measured from the frame's left edge, so the frame
+     can be drawn and set out with a tape. */
+  const mids=[]; let mx=lOH;
+  seg.cabs.forEach((c,i)=>{
+    if(c.split&&(c.w-ff)>cfg.door_two_over+1e-9) mids.push({x:r4(mx+c.w/2),kind:'split',id:c.id});
+    mx+=c.w;
+    if(i<seg.cabs.length-1){ mx+=(seg.gaps[i]||0); mids.push({x:r4(mx),kind:'seam',id:c.id}); }
+  });
   if(Math.abs(lStile-rStile)<1e-9) push('End Stile',frameH,lStile,2);
   else{
     push('End Stile — left',frameH,lStile,1);
@@ -2062,7 +2108,8 @@ function faceFrameSeg(run,R,seg,cfg,tag,fit){
           topOH:r4(topOH),botOH:r4(botOH),glued:railLen>cfg.stock_length+1e-9,
           ids:seg.cabs.map(c=>c.id),
           lStile:r4(lStile),rStile:r4(rStile),lOH:r4(lOH),rOH:r4(rOH),
-          fitL:!!fit.fitL,fitR:!!fit.fitR,
+          fitL:!!fit.fitL,fitR:!!fit.fitR,mids,railW:r4(railW),ffW:r4(ff),
+          railLen:r4(railLen),midLen:r4(frameH-2*railW),
           mixed:seg.cabs.some(c=>c.h!==seg.cabs[0].h)};
 }
 /* One frame per segment of the run. */
@@ -2171,6 +2218,7 @@ function solveRun(run,cfg){
     split:(state[run].cabs[i].split||st.def.sp||'No')==='Yes',
     dh:(state[run].cabs[i].dh||[]).slice(),
     align:state[run].cabs[i].align||st.def.al||'Top',
+    kick:run==='lower'?(state[run].cabs[i].kick||''):'',
     mount:run==='lower'?(state[run].cabs[i].mount||st.def.m||'Overlay'):'Overlay',
     autoW:widths[i]===null
   }));
@@ -2249,6 +2297,7 @@ function build(){
     if(tk&&tk.error) warns.push(tk.error);
     else if(tk){
       tkInfo=tk;
+      if(tk.warns) warns.push(...tk.warns);
       for(const p of tk.parts){
         const k=[p.cab,p.name,p.mat,p.L,p.W].join('|');
         if(!agg.has(k)){ agg.set(k,{...p,qty:0,run:'lower'}); order.push(k); }
@@ -2380,6 +2429,7 @@ function tabDefs(){
   if(include.out.drawings){
     for(const r of RUNS)
       if(RESULT.runs[r]?.cabs.length) t.push({id:'dwg:'+r,label:(r==='upper'?'Upper':'Lower')+' build'});
+    if(RESULT.ffInfo?.length) t.push({id:'dwgff',label:'Frame build'});
     if(RESULT.frontInfo.some(f=>f.kind==='doors')) t.push({id:'dwgdoor',label:'Door build'});
     if(RESULT.frontInfo.some(f=>f.kind==='fronts')||RESULT.cabs.some(c=>c.interior==='Drawers'&&c.shelves))
       t.push({id:'dwgdrw',label:'Drawer build'});
@@ -2420,6 +2470,7 @@ function render(){
   if(VIEW==='est')    return viewEstimate(body,sum);
   if(VIEW==='timer')  return viewTimer(body,sum);
   if(VIEW==='shop')   return viewShopping(body,sum);
+  if(VIEW==='dwgff')   return viewFrames(body,sum);
   if(VIEW==='dwgdoor') return viewDoors(body,sum);
   if(VIEW==='dwgdrw')  return viewDrawers(body,sum);
   if(VIEW.indexOf('dwg:')===0) return viewBuild(body,sum,VIEW.slice(4));
@@ -2463,8 +2514,10 @@ function viewLayout(tb,sum){
     const T=RESULT.tkInfo;
     h+='<tr class="grp"><td colspan="6">toe kick base — '+fmt(T.runLen)+'" run, '+fmt(T.depth)+'" deep</td></tr>';
     for(const s of T.secs)
-      h+='<tr><td><b>TK'+s.n+'</b></td><td class="n">'+fmt(s.len)+'"</td><td colspan="2">'+
-         s.cabs+' cabinet'+(s.cabs>1?'s':'')+'</td><td colspan="2">'+(s.rungs+2)+' verticals</td></tr>';
+      h+='<tr><td><b>TK'+s.n+'</b>'+(s.num!=null?' <span style="color:#1d5f8a">base '+s.num+'</span>':'')+
+         '</td><td class="n">'+fmt(s.len)+'"</td><td colspan="2">'+
+         (s.ids?s.ids.join(', '):s.cabs+' cabinet'+(s.cabs>1?'s':''))+'</td><td colspan="2">'+
+         (s.rungs+2)+' verticals</td></tr>';
   }
   tb.innerHTML=h+'</tbody>';
 }
@@ -3156,6 +3209,95 @@ function drawDrawerBox(bw,bd,bh,cfg,label){
   return svgBox(DW,by+12,g);
 }
 
+/* ---- face frame elevation ----
+   The whole assembly flat on the bench: end stiles, rails between them, and a mid
+   stile at every seam. Ballooned to a parts table, and the mid stiles are given as
+   running dimensions off the left edge so the frame can be set out with a tape. */
+function drawFaceFrame(f,cfg){
+  const M=58, TOPM=30;                    // room for the height dimension on the left
+  const s=Math.min((DW-M-30)/f.frameW, 128/f.frameH);
+  const W=f.frameW*s, H=f.frameH*s;
+  const lS=f.lStile*s, rS=f.rStile*s, rw=f.railW*s, mw=f.ffW*s;
+  let g='';
+  g+=R(M,TOPM,W,H,'#fdfdfd',DINK);
+  g+=R(M+lS,TOPM,W-lS-rS,rw,'#eef2f6',DINK,THIN);            // top rail
+  g+=R(M+lS,TOPM+H-rw,W-lS-rS,rw,'#eef2f6',DINK,THIN);       // bottom rail
+  for(const m of f.mids){
+    const cx=M+m.x*s;
+    g+=R(cx-mw/2,TOPM+rw,mw,H-2*rw,'#eef2f6',DINK,THIN);
+  }
+  g+=R(M,TOPM,lS,H,'#e8edf2',DINK,THIN);                     // end stiles last, on top
+  g+=R(M+W-rS,TOPM,rS,H,'#e8edf2',DINK,THIN);
+
+  const balloon=(x,y,n)=>'<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+
+    '" r="7.5" fill="#fff" stroke="'+DACC+'" stroke-width="0.8"/>'+
+    TX(x,y+3,String(n),8.5,'middle',DACC);
+  g+=balloon(M+lS/2,TOPM+H*0.30,1);
+  g+=balloon(M+W-rS/2,TOPM+H*0.30,2);
+  g+=balloon(M+W/2,TOPM+rw/2,3);
+  if(f.mids.length) g+=balloon(M+f.mids[0].x*s,TOPM+H*0.72,4);
+
+  g+=dimH(M,M+W,TOPM-12,fmt(f.frameW)+'"');
+  g+=dimV(TOPM,TOPM+H,M-10,fmt(f.frameH)+'"');
+  const by=TOPM+H+18;
+  g+=dimH(M+lS,M+W-rS,by,fmt(f.railLen));
+  /* End stiles on their own row so the narrow ones don't collide with the rail. */
+  g+=dimH(M,M+lS,by+15,fmt(f.lStile));
+  g+=dimH(M+W-rS,M+W,by+15,fmt(f.rStile));
+  /* Running dimensions to each mid stile centre, measured from the left end of the
+     rail — that is the edge you actually hook a tape on when marking out. */
+  let ly=by+31;
+  if(f.mids.length){
+    g+=LN(M+lS,ly,M+W-rS,ly,DMUT,THIN);
+    g+=TX(M+lS,ly+11,'0',7.5,'middle',DMUT);
+    g+=LN(M+lS,ly-3,M+lS,ly+3,DMUT,THIN);
+    for(const m of f.mids){
+      const cx=M+m.x*s;
+      g+=LN(cx,ly-3,cx,ly+3,DMUT,THIN);
+      g+=TX(cx,ly+11,fmt(r4(m.x-f.lStile)),7.5,'middle',DMUT);
+    }
+    ly+=16;
+  }
+  return svgBox(DW,ly+8,g);
+}
+function frameTable(f){
+  const rows=[];
+  let n=0;
+  for(const p of f.parts) rows.push({n:++n,qty:p.qty,w:p.W,l:p.L,name:p.name});
+  let h='<div class="tblwrap"><table><thead><tr><th class="n">Item</th><th>Part</th>'+
+    '<th class="n">Qty</th><th class="n">Width</th><th class="n">Length</th></tr></thead><tbody>';
+  for(const r of rows)
+    h+='<tr><td class="n">'+r.n+'</td><td>'+r.name+'</td><td class="n">'+r.qty+
+       '</td><td class="n">'+fmt(r.w)+'"</td><td class="n">'+fmt(r.l)+'"</td></tr>';
+  return h+'</tbody></table></div>';
+}
+function viewFrames(body,sum){
+  const cfg=RESULT.cfg, list=RESULT.ffInfo||[];
+  if(!list.length){
+    body.innerHTML='<div class="hint">No face frames in this job. A run only gets one when its default construction is Face frame and the frame is ticked under Include in this job.</div>';
+    sum.innerHTML=''; return;
+  }
+  sum.innerHTML='<div>Frames<b>'+list.length+'</b></div>'+
+    '<div>Widest<b>'+fmt(Math.max(...list.map(f=>f.frameW)))+'"</b></div>'+
+    '<div>Sticks of poplar<b>'+
+      (RESULT.groups.reduce((a,g)=>a+(g.sticks?g.sticks.length:0),0)||'—')+'</b></div>';
+  let h='';
+  for(const f of list){
+    h+='<div class="dwg"><h4>'+f.tag+' &middot; '+(f.run==='upper'?'upper':'lower')+' run</h4>'+
+       '<div class="dwgsub">'+fmt(f.frameW)+'" &times; '+fmt(f.frameH)+'" &middot; covers '+f.ids.join(', ')+
+       (f.fitL||f.fitR?' &middot; fitted to the wall':'')+'</div>'+
+       drawFaceFrame(f,cfg)+frameTable(f);
+    const notes=[];
+    if(f.fitL) notes.push('The left end stile is cut to '+fmt(f.lStile)+'" to close the measured gap.');
+    if(f.fitR) notes.push('The right end stile is cut to '+fmt(f.rStile)+'".');
+    if(f.glued) notes.push('The rails are longer than one stick, so each is glued from two pieces jointed at a stile.');
+    if(f.splits) notes.push(f.splits+' extra centre stile'+(f.splits>1?'s':'')+' for the split openings.');
+    notes.push('Running dimensions are to the centre of each mid stile, measured from the left end of the rail — the inner edge of the left end stile.');
+    h+='<div class="dwgnote">'+notes.join(' ')+'</div></div>';
+  }
+  body.innerHTML=h;
+}
+
 /* ---- tab rendering ---- */
 function uniqueCabs(run){
   const R2=RESULT.runs[run]; if(!R2?.cabs.length) return [];
@@ -3673,6 +3815,7 @@ function printPack(){
       else if(t.id==='est') viewEstimate(tmpBody,tmpSum);
       else if(t.id==='shop') viewShopping(tmpBody,tmpSum);
       else if(t.id==='timer') continue;
+      else if(t.id==='dwgff') viewFrames(tmpBody,tmpSum);
       else if(t.id==='dwgdoor') viewDoors(tmpBody,tmpSum);
       else if(t.id==='dwgdrw') viewDrawers(tmpBody,tmpSum);
       else if(t.id.indexOf('dwg:')===0) viewBuild(tmpBody,tmpSum,t.id.slice(4));
@@ -4235,7 +4378,7 @@ function load(){
     Object.assign(state[r],s);
     state[r].def=Object.assign({h:'',w:'',d:r==='upper'?'18':'24',s:'2',i:'Shelves',b:'Yes',c:d.construction||'Frameless',m:'Overlay',sp:'No',ceil:'No'},s.def||{});
     // v2 jobs stored per-cabinet depth/shelves; keep them as overrides
-    state[r].cabs=(state[r].cabs||[]).map(c=>({w:c.w||'',h:c.h||'',d:c.d||'',shelves:c.shelves??'',interior:c.interior||'',back:c.back||'',constr:c.constr||'',mount:c.mount||'',split:c.split||'',dh:c.dh||[]}));
+    state[r].cabs=(state[r].cabs||[]).map(c=>({w:c.w||'',h:c.h||'',d:c.d||'',shelves:c.shelves??'',interior:c.interior||'',back:c.back||'',constr:c.constr||'',mount:c.mount||'',split:c.split||'',dh:c.dh||[],align:c.align||'',kick:c.kick||''}));
   }
   if(d.v<3&&d.heights) for(const r of RUNS) if(d.heights[r]) state[r].def.h=d.heights[r];
   if(d.built){ pendingBuild=true; pendingView=d.view||'layout'; }
