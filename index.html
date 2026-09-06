@@ -627,7 +627,7 @@ body.printing .wrap{padding-bottom:120px}
           <div><label>Lower top OH</label><input id="lower_top_overhang" inputmode="text" value="0"></div>
           <div><label>Lower bottom OH</label><input id="lower_bottom_overhang" inputmode="text" value="1/4"></div>
         </div>
-        <div class="fieldnote" style="margin-top:8px">End stiles sit centred on the outer face of the end cabinets, so the frame overhangs half a stile each side for scribing.</div>
+        <div class="fieldnote" style="margin-top:8px">End stiles sit centred on the outer face of the end cabinets, so the frame overhangs half a stile each side for scribing. <b>Cut from</b> is the choice between buying sticks and milling your own: <b>Sticks</b> buys ready-milled stock at the stock width and length above and prices it per stick; <b>Boards</b> pulls rough lumber off the rack, prices it by the board foot and adds the milling time. Anything wider than the stock width has to come off boards whatever the menu says.</div>
 
         <div class="cfgsec">Doors &amp; fronts <span>shaker, panel in a dado</span></div>
         <div class="grid g3">
@@ -642,6 +642,7 @@ body.printing .wrap{padding-bottom:120px}
           <div><label>Offer split if over</label><input id="door_two_over" inputmode="text" value="24"></div>
           <div><label>Panel stock</label><select id="door_panel_stock"></select></div>
         </div>
+        <div class="fieldnote" style="margin-top:8px">Doors and drawer fronts each choose their own <b>Cut from</b>, so a 2" run can be bought as sticks or milled off the rack and the estimate follows either way.</div>
 
         <div class="cfgsec">Drawers <span>stock resolves to the actuals above</span></div>
         <div class="grid g3">
@@ -769,6 +770,11 @@ body.printing .wrap{padding-bottom:120px}
           <div><label>Pull / door or front</label><input id="hw_pull" inputmode="decimal" value="5"></div>
           <div><label>Shelf pins / shelf</label><input id="hw_pin" inputmode="decimal" value="1"></div>
         </div>
+        <div class="cfgsec">Rough lumber <span>when a run is milled instead of bought as sticks</span></div>
+        <div class="grid g2">
+          <div><label>Rough stock $/board ft</label><input id="mill_bf" inputmode="decimal" value="2.90"></div>
+        </div>
+        <div class="fieldnote" style="margin-top:8px">Board feet are figured on the boards actually taken off the rack, at 4/4. Only jobs with a run set to <b>Boards</b> pick this up \u2014 a job cut from sticks is priced per stick as before.</div>
 
         <div class="cfgsec">Finishing <span>sprayed</span></div>
         <div class="grid g3">
@@ -3612,7 +3618,8 @@ function fillAssump(){
 const BASES=[
   ['flat','job'],['box','box'],['door','door'],['front','drawer front'],
   ['drawerbox','drawer box'],['sheet','sheet'],['stick','stick'],
-  ['frame','face frame'],['tk','toe kick section'],['shelf','shelf'],['sqft','sq ft finished']
+  ['frame','face frame'],['tk','toe kick section'],['shelf','shelf'],['sqft','sq ft finished'],
+  ['millpart','milled part']
 ];
 const DEFAULT_TASKS=[
   {id:'design',  name:'Design & quote',        setup:90, per:10, basis:'box'},
@@ -3620,6 +3627,10 @@ const DEFAULT_TASKS=[
   {id:'cutbox',  name:'Cut box parts',         setup:20, per:14, basis:'box'},
   {id:'asmbox',  name:'Box assembly',          setup:15, per:25, basis:'box'},
   {id:'tk',      name:'Toe kick base',         setup:20, per:30, basis:'tk'},
+  /* Only charged when a run is cut from boards rather than bought sticks. A job on
+     sticks counts zero milled parts and the row is left out entirely, so nothing that
+     was already estimated changes. */
+  {id:'mill',    name:'Mill lumber to spec',   setup:25, per:1.2, basis:'millpart'},
   {id:'millff',  name:'Cut face frame parts',  setup:25, per:6,  basis:'stick'},
   {id:'asmff',   name:'Face frame assembly',   setup:20, per:45, basis:'frame'},
   {id:'hangff',  name:'Attach face frames',    setup:10, per:12, basis:'box'},
@@ -3641,7 +3652,7 @@ const FIN_MODES=['Primer + paint','Primer only','Paint only','No finish'];
 const FIN_KEYS=['fin_primer_coats','fin_primer_price','fin_primer_cov','fin_paint_coats',
   'fin_paint_price','fin_paint_cov','fin_fan','fin_overlap','fin_speed','fin_setup','fin_scuff','fin_dry'];
 const est={rate:65,overhead:15,profit:20,tasks:DEFAULT_TASKS.map(t=>({...t})),prices:{...DEFAULT_PRICES},
-           hw:{box:6,slide:18,hinge:7,pull:5,pin:1},fin:{}};
+           hw:{box:6,slide:18,hinge:7,pull:5,pin:1},millbf:2.90,fin:{}};
 
 function renderTaskRows(){
   const host=document.getElementById('taskRows');
@@ -3695,6 +3706,7 @@ function readEst(){
   for(const [k,id] of [['box','hw_box'],['slide','hw_slide'],['hinge','hw_hinge'],
                        ['pull','hw_pull'],['pin','hw_pin']])
     est.hw[k]=parseFloat(document.getElementById(id).value)||0;
+  est.millbf=parseFloat(document.getElementById('mill_bf').value)||0;
   for(const k of FIN_KEYS) est.fin[k]=parseFloat(document.getElementById(k).value)||0;
   est.fin.mode=document.getElementById('fin_mode').value||FIN_MODES[0];
   return est;
@@ -3704,7 +3716,8 @@ function saveEst(){ readEst(); clearTimeout(window._se); window._se=setTimeout(s
 /* Count everything the tasks can be charged against. */
 function estCounts(R){
   const c={flat:1,box:R.cabs.length,door:0,front:0,drawerbox:0,shelf:0,
-           sheet:0,stick:0,frame:R.ffInfo.length,tk:R.tkInfo?R.tkInfo.secs.length:0,sqft:0};
+           sheet:0,stick:0,frame:R.ffInfo.length,tk:R.tkInfo?R.tkInfo.secs.length:0,sqft:0,
+           millpart:0,millbf:0};
   for(const f of R.frontInfo){
     if(f.kind==='doors') c.door+=f.n; else c.front+=f.n;
   }
@@ -3715,7 +3728,18 @@ function estCounts(R){
   for(const g of R.groups){
     if(g.nest) c.sheet+=g.nest.sheets;
     if(g.sticks) c.stick+=g.sticks.length;
+    /* Anything cut from boards has to be milled to thickness and width first. */
+    if(g.wideParts) for(const p of g.wideParts) c.millpart+=p.qty;
+    if(g.boards) for(const b of new Set(g.boards.panels.map(p=>p.board))) c.millbf+=b.l*b.w/144;
+    /* Cutting parts to length is charged per stick. Milling instead of buying used to
+       drop that count to zero and lose the time with it, though the crosscutting still
+       happens — so a milled run counts the stick-lengths of stock it works through. */
+    if(g.wideParts&&g.wideParts.length&&R.cfg.stock_length>0){
+      const lin=g.wideParts.reduce((a,p)=>a+p.L*p.qty,0);
+      c.stick+=Math.ceil(lin/R.cfg.stock_length);
+    }
   }
+  c.millbf=r4(c.millbf);
   /* Finished area: both faces of every door and front, plus the outside of each box. */
   let fa=0;
   for(const p of R.parts)
@@ -3776,6 +3800,15 @@ function buildEstimate(R){
     matRows.push({name:m,qty:used[m],unit:m===POPLAR?'stick':'sheet',price,cost});
     matCost+=cost;
   }
+  /* Boards taken off the rack were being carried at nothing, so a milled run showed
+     its labour but none of its material. Sticks are still priced per stick. */
+  if(c.millbf>0&&est.millbf>0){
+    const bf=Math.round(c.millbf*100)/100;      // charge what the row shows, to the cent
+    const cost=bf*est.millbf;
+    matRows.push({name:'Rough lumber milled',qty:bf.toFixed(2),unit:'board ft',
+                  price:est.millbf,cost});
+    matCost+=cost;
+  }
 
   const hwRows=[];
   const addHw=(name,qty,price)=>{ if(qty>0&&price>0){ hwRows.push({name,qty,price,cost:qty*price}); } };
@@ -3818,8 +3851,13 @@ function viewEstimate(body,sum){
 
   h+='<div class="estsec"><h3>Materials</h3><div class="tblwrap"><table>'+
     '<thead><tr><th>Material</th><th class="n">Qty</th><th class="n">Each</th><th class="n">Cost</th></tr></thead><tbody>';
-  for(const r of e.matRows)
-    h+='<tr><td>'+r.name+'</td><td class="n">'+r.qty+' '+r.unit+(r.qty>1?'s':'')+'</td><td class="n">'+$(r.price)+'</td><td class="n">'+$(r.cost)+'</td></tr>';
+  for(const r of e.matRows){
+    /* A rate under a dollar or two rounds to nothing useful at whole dollars, so a
+       per-board-foot price keeps its cents. Sheets and sticks read as before. */
+    const each=r.unit==='board ft'?'$'+r.price.toFixed(2):$(r.price);
+    const qty=r.unit==='board ft'?r.qty+' bf':r.qty+' '+r.unit+(r.qty>1?'s':'');
+    h+='<tr><td>'+r.name+'</td><td class="n">'+qty+'</td><td class="n">'+each+'</td><td class="n">'+$(r.cost)+'</td></tr>';
+  }
   h+='<tr class="grp"><td colspan="3">material subtotal</td><td class="n">'+$(e.matCost)+'</td></tr></tbody></table></div></div>';
 
   h+='<div class="estsec"><h3>Hardware &amp; finish</h3><div class="tblwrap"><table>'+
@@ -4925,6 +4963,7 @@ function applyMaster(m){
     est.rate=m.est.rate??est.rate; est.overhead=m.est.overhead??est.overhead; est.profit=m.est.profit??est.profit;
     Object.assign(est.prices,m.est.prices||{}); Object.assign(est.hw,m.est.hw||{});
     Object.assign(est.fin,m.est.fin||{});
+    est.millbf=m.est.millbf??est.millbf;
     if(Array.isArray(m.est.tasks))
       for(const t of est.tasks){ const s=m.est.tasks.find(x=>x.id===t.id); if(s) Object.assign(t,JSON.parse(JSON.stringify(s))); }
     syncEstInputs();
@@ -4937,6 +4976,7 @@ function syncEstInputs(){
   for(const [k,id] of [['box','hw_box'],['slide','hw_slide'],['hinge','hw_hinge'],
                        ['pull','hw_pull'],['pin','hw_pin']])
     document.getElementById(id).value=est.hw[k];
+  if(est.millbf!=null) document.getElementById('mill_bf').value=est.millbf;
   for(const k of FIN_KEYS) if(est.fin[k]!=null) document.getElementById(k).value=est.fin[k];
   const fm=document.getElementById('fin_mode');
   fm.innerHTML=''; for(const m of FIN_MODES) fm.append(new Option(m,m));
@@ -5462,6 +5502,8 @@ function load(){
     for(const [k,id] of [['box','hw_box'],['slide','hw_slide'],['hinge','hw_hinge'],
                          ['pull','hw_pull'],['pin','hw_pin']])
       document.getElementById(id).value=est.hw[k];
+    if(d.est.millbf!=null){ est.millbf=d.est.millbf;
+      document.getElementById('mill_bf').value=est.millbf; }
   }
   /* Older jobs had one setting for the whole job; carry it onto all three maps. */
   for(const k of ['cab','drw','ff']){
