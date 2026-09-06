@@ -290,10 +290,12 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .sheetwrap{margin-bottom:18px}
 .sheetwrap h3{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin-bottom:6px}
 .sheetwrap svg{width:100%;height:auto;display:block;border-radius:6px}
-.boardrow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;
+.boardrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
   align-items:start;margin-bottom:14px}
-.boardcell h3{font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
-  color:var(--ink-2);margin-bottom:4px;line-height:1.25}
+/* The name goes under the drawing: above it, a title that wraps to two lines pushes
+   its board down and the tops stop lining up across the row. */
+.boardcell h3{font-size:9px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--ink-2);margin:5px 0 0;line-height:1.25;text-align:center}
 .boardcell svg{width:100%;height:auto;display:block}
 .legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--ink-2);margin-bottom:12px}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px;border:1px solid #999}
@@ -384,7 +386,7 @@ body.printing #printPack{display:block}
      Drive it off the height instead and let the width follow the aspect ratio. */
   .sheetpanel svg{width:auto!important;height:8.4in!important;max-width:100%;
     display:block;margin:0 auto}
-  /* Three boards to a page, each sized off its height like the sheets. */
+  /* Four boards to a page, each sized off its height like the sheets. */
   .boardrow{page-break-before:always;break-before:page;
     page-break-inside:avoid;break-inside:avoid}
   .boardcell svg{width:auto!important;height:7.9in!important;max-width:100%;
@@ -1432,6 +1434,27 @@ function boardPieces(len){
   }
   return out;
 }
+/* A board is worked in pieces no longer than the crosscut limit, but the crosscut
+   falls where the work actually ends, not at the limit. Cutting at a round 60" when
+   the parts stop at 49 7/16" throws away ten inches of good board and leaves a phantom
+   scrap block on the drawing between the last part and the cut. */
+function trimSeg(res){
+  const parts=res.pl.filter(p=>p.kind==='part');
+  if(!parts.length) return null;
+  const usedLen=r4(Math.max(...parts.map(p=>p.y+p.h)));
+  const kept=[]; let scrap=0, keep=0;
+  for(const p of res.pl){
+    if(p.kind!=='offcut'){ kept.push(p); continue; }
+    if(p.y>=usedLen-EPS) continue;                    // past the cut: still board, not waste
+    const h=r4(Math.min(p.h,usedLen-p.y));
+    if(h<=EPS) continue;
+    const o=Object.assign({},p,{h,tier:boardTier(p.w,h)});
+    kept.push(o);
+    if(o.tier==='inventory') keep+=o.w*o.h; else scrap+=o.w*o.h;
+  }
+  return {kept,usedLen,scrap,keep};
+}
+
 function packBoards(parts,stock){
   let uid=0; const flat=[];
   for(const p of parts)
@@ -1444,35 +1467,40 @@ function packBoards(parts,stock){
      wins; the smaller board breaks a tie, so the rack still burns down. Reaching for
      the smallest board outright was making scrap — a 5" board yields one 3" rip and
      a 1 7/8" sliver, where a 10" board yields two rips and a keeper. */
-  const queue=stock.filter(o=>!o.used).map(b=>({b,segs:boardPieces(b.l),si:0}));
+  const queue=stock.filter(o=>!o.used).map(b=>({b,pos:0}));
   const touched=new Set();
   let guard=0;
   while(remaining.length&&guard++<400){
     let best=null;
     for(const e of queue){
-      if(e.si>=e.segs.length) continue;
-      const segLen=e.segs[e.si];
+      const avail=r4(e.b.l-e.pos);
+      if(avail<=EPS) continue;
+      const segLen=Math.min(RIP_MAX,avail);
       const res=packBoardSeg(remaining,e.b.w,segLen,e.b.material);
       if(!res) continue;
-      const perPart=res.scrap/Math.max(1,res.placed.length);
+      /* Scored on the waste that is really made, which is only what sits above the
+         crosscut — everything past it stays on the board. */
+      const t=trimSeg(res);
+      if(!t) continue;
+      const perPart=t.scrap/Math.max(1,res.placed.length);
       const key=[Math.round(perPart*100)/100, e.b.l*e.b.w, -res.placed.length];
-      if(!best||cmpArr(key,best.key)<0) best={key,res,e,segLen};
+      if(!best||cmpArr(key,best.key)<0) best={key,res,t,e};
     }
     if(!best) break;
-    const {res,e,segLen}=best;
-    panels.push({placements:res.pl,w:e.b.w,l:segLen,board:e.b,si:e.si,segs:e.segs,
+    const {res,t,e}=best;
+    panels.push({placements:t.kept,w:e.b.w,l:t.usedLen,board:e.b,start:e.pos,
       label:e.b.material+' — '+fmt(e.b.l)+'" \u00d7 '+fmt(e.b.w)+'" board'});
-    scrapArea+=res.scrap;
-    keepArea+=res.pl.filter(o=>o.kind==='offcut'&&o.tier==='inventory')
-                    .reduce((a,o)=>a+o.w*o.h,0);
+    scrapArea+=t.scrap;
+    keepArea+=t.keep;
     const done=new Set(res.placed.map(x=>x.id));
     remaining=remaining.filter(x=>!done.has(x.id));
-    e.si++;
+    e.pos=r4(e.pos+t.usedLen+KERF);      // the next piece starts on the far side of the cut
     touched.add(e.b);
   }
   for(const b of touched) b.used=true;
-  return {panels:mergeBoardPanels(panels),boardsUsed:touched.size,unplaced:remaining,segMax:RIP_MAX,
-          scrapArea:r4(scrapArea),keepArea:r4(keepArea)};
+  const m=mergeBoardPanels(panels);
+  return {panels:m.panels,boardsUsed:touched.size,unplaced:remaining,segMax:RIP_MAX,
+          scrapArea:r4(scrapArea+m.scrap),keepArea:r4(keepArea+m.keep)};
 }
 
 /* One drawing per board, not per piece. A board longer than the crosscut limit is
@@ -1485,27 +1513,30 @@ function mergeBoardPanels(panels){
     if(!byBoard.has(p.board)) byBoard.set(p.board,[]);
     byBoard.get(p.board).push(p);
   }
-  const out=[];
+  const out=[]; let scrap=0, keep=0;
   for(const [b,list] of byBoard){
-    list.sort((x,y)=>x.si-y.si);
+    list.sort((x,y)=>x.start-y.start);
     const placements=[]; const cuts=[];
-    let y=0;
+    let end=0;
     list.forEach((p,n)=>{
-      if(n) y=r4(y+KERF);                       // the saw kerf between two pieces
       for(const pl of p.placements)
-        placements.push(Object.assign({},pl,{y:r4(pl.y+y)}));
-      y=r4(y+p.l);
-      /* A crosscut only exists between two pieces that are both worked. Past the last
-         one the board is simply uncut, so no line goes there. */
-      if(n<list.length-1) cuts.push(y);
+        placements.push(Object.assign({},pl,{y:r4(pl.y+p.start)}));
+      end=r4(p.start+p.l);
+      /* A crosscut only exists between two pieces that are both worked, and it falls
+         where the work ends rather than at the crosscut limit. Past the last piece the
+         board is simply uncut, so no line goes there. */
+      if(n<list.length-1) cuts.push(end);
     });
-    /* Whatever is left past the last piece worked is still board, uncut. */
-    if(y<b.l-EPS)
-      placements.push({kind:'offcut',x:0,y,w:b.w,h:r4(b.l-y),tier:boardTier(b.w,r4(b.l-y))});
+    /* Whatever is left past the last piece worked is still board, in one length. */
+    if(end<b.l-EPS){
+      const h=r4(b.l-end), tier=boardTier(b.w,h);
+      placements.push({kind:'offcut',x:0,y:end,w:b.w,h,tier});
+      if(tier==='inventory') keep+=b.w*h; else scrap+=b.w*h;
+    }
     out.push({placements,w:b.w,l:b.l,board:b,cuts,
               label:b.material+' — '+fmt(b.l)+'" \u00d7 '+fmt(b.w)+'" board'});
   }
-  return out;
+  return {panels:out,scrap:r4(scrap),keep:r4(keep)};
 }
 
 /* ================= fractions ================= */
@@ -3389,18 +3420,19 @@ function viewMap(body,sum,g){
     h+='<h3 style="font-size:13px;margin:18px 0 6px">Boards — '+B.boardsUsed+
       ' board(s) off the rack</h3>'+
       '<div class="legend"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>worth keeping</span>'+
-      '<span><i style="background:#ececec;border-color:#b0b0b0"></i>scrap</span></div>'+
-      '<div class="hint" style="margin:0 0 8px"><b>Every board is crosscut to '+fmt(B.segMax)+
-      '" or less before ripping</b>, so a longer board shows up here as two or more pieces \u2014 '+
-      'a '+fmt(B.segMax)+'" piece is a cut off a longer board on the rack, not a board in its own right. A leftover under '+
+      '<span><i style="background:#ececec;border-color:#b0b0b0"></i>scrap</span>'+
+      '<span><i style="background:#d33;border-color:#d33"></i>crosscut</span></div>'+
+      '<div class="hint" style="margin:0 0 8px">Each board is drawn whole. <b>No piece is worked longer than '+
+      fmt(B.segMax)+'"</b>, so a longer board gets a crosscut \u2014 marked in red \u2014 but it falls where the '+
+      'work on that piece ends, not at '+fmt(B.segMax)+'", so nothing good is cut off behind it. A leftover under '+
       fmt(BOARD_MIN_W)+'" wide or under '+fmt(BOARD_MIN_L)+
       '" long counts as scrap; the layout is chosen to make as little of it as possible. '+
       'The board that throws away least is used first, with the smaller board breaking a tie. Scrap on this job: '+
       (B.scrapArea/144).toFixed(1)+' sq ft, keepers '+(B.keepArea/144).toFixed(1)+' sq ft.</div>';
     /* Boards are narrow, so three sit side by side instead of one per page. */
     B.panels.forEach((p,i)=>{
-      if(i%3===0) h+=(i?'</div>':'')+'<div class="boardrow">';
-      h+='<div class="boardcell"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p,true)+'</div>';
+      if(i%4===0) h+=(i?'</div>':'')+'<div class="boardrow">';
+      h+='<div class="boardcell">'+sheetSVG(p,true)+'<h3>'+esc(p.label)+'</h3></div>';
     });
     if(B.panels.length) h+='</div>';
   }
@@ -3446,13 +3478,38 @@ function viewOffcuts(tb,sum,body){
     '</div>');
 }
 
+/* Where each ordinate value sits beside the board. Turned on its side the number
+   hugs the board instead of standing a wide margin off it, but on its side it is as
+   tall as it used to be wide, so two close cuts would print over each other. Those
+   step out into a second column rather than being crowded or dropped. */
+const ORD_S=6, ORD_TOP=8, ORD_COL=13;
+function boardOrdinates(panel){
+  const prt=panel.placements.filter(p=>p.kind==='part');
+  const red=panel.cuts||[];
+  const vals=[...new Set(prt.map(p=>r4(p.y+p.h)).concat(red))].sort((a,b)=>a-b)
+    .filter(y=>y>EPS&&y<panel.l-EPS&&
+      (red.some(c=>Math.abs(c-y)<EPS)||!prt.some(p=>p.y+EPS<y&&y<p.y+p.h-EPS)));
+  const items=[{y:0,txt:'0'}].concat(vals.map(y=>({y,txt:fmt(y)+'"'})));
+  const lastIn=[];
+  for(const it of items){
+    const py=ORD_TOP+it.y*ORD_S;
+    const half=(it.txt.length*4.7+4)/2;          // on its side, the label is this tall
+    let c=0;
+    while(lastIn[c]!==undefined&&py-half<lastIn[c]+2) c++;
+    lastIn[c]=py+half;
+    it.col=c;
+  }
+  return {items,vals,ncol:lastIn.length};
+}
+
 function sheetSVG(panel,board){
   const S=6, TOP=8;
   /* Sheets keep a wide left margin for the mid-cut dimension. Boards have no
      mid-cut; they spend the margin on drawn dimensions instead — a narrow one on
-     the left for the length, room on the right for the ordinate stack, and a
-     strip underneath for the width. Three still fit across a printed page. */
-  const M=board?26:52, RM=board?50:10, BOT=board?24:8;
+     the left for the length, the ordinate stack turned on its side to the right, and
+     a strip underneath for the width. Four still fit across a printed page. */
+  const ORD=board?boardOrdinates(panel):null;
+  const M=board?26:52, RM=board?(16+ORD.ncol*ORD_COL):10, BOT=board?24:8;
   const W=panel.w*S, H=panel.l*S;
   const vw=M+W+RM, vh=TOP+H+BOT;
   const TF={inventory:'#dcedc8',keep:'#ececec',trash:'#f7d6d6'};
@@ -3509,28 +3566,26 @@ function sheetSVG(panel,board){
        worked in two pieces is still drawn — and read — as one board. */
     for(const cy of (panel.cuts||[])){
       const py=TOP+cy*S;
-      /* Written out rather than through LN, which already fixes its own width. */
+      /* Written out rather than through LN, which fixes its own width. No label on the
+         line itself — it lands on top of whatever part it crosses; the legend names it. */
       e+='<line x1="'+x0+'" y1="'+py.toFixed(1)+'" x2="'+x1+'" y2="'+py.toFixed(1)+
-         '" stroke="#d33" stroke-width="2"/>'+
-         TX(x0+4,py-4,'crosscut',8,'start','#d33');
+         '" stroke="#d33" stroke-width="2"/>';
     }
     /* Ordinate stack of the crosscuts, zero at the end the parts start from.
        Only a cut that runs clear across the board is ordinated — a part edge with
        another part still alongside it is a rip-length cut, not a crosscut, and
        measuring to it off the board end would be wrong. The red ones always qualify:
        they run right through. */
-    const prt=panel.placements.filter(p=>p.kind==='part');
-    const red=panel.cuts||[];
-    const cuts=[...new Set(prt.map(p=>r4(p.y+p.h)).concat(red))].sort((a,b)=>a-b)
-      .filter(y=>y>EPS&&y<panel.l-EPS&&
-        (red.some(c=>Math.abs(c-y)<EPS)||!prt.some(p=>p.y+EPS<y&&y<p.y+p.h-EPS)));
-    const ax=x1+10;
-    e+=LN(x1,y0,ax+3,y0,DMUT,null,0.6)+TX(ax+5,y0+3,'0',8.5,'start',DMUT);
-    for(const y of cuts){
-      const py=TOP+y*S;
-      e+=LN(x1,py,ax+3,py,DMUT,null,0.6)+TX(ax+5,py+3,fmt(y)+'"',8.5,'start',DMUT);
+    const ax=x1+6;
+    for(const it of ORD.items){
+      const py=TOP+it.y*S, tx=ax+4+it.col*ORD_COL;
+      e+=LN(x1,py,tx-3,py,DMUT,null,0.6)+
+         '<text x="'+tx.toFixed(1)+'" y="'+py.toFixed(1)+'" font-size="8.5" fill="'+DMUT+
+         '" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 '+
+         tx.toFixed(1)+' '+py.toFixed(1)+')">'+it.txt+'</text>';
     }
-    if(cuts.length) e+=LN(ax,y0,ax,TOP+cuts[cuts.length-1]*S,DMUT,null,0.6);
+    if(ORD.items.length>1)
+      e+=LN(ax,y0,ax,TOP+ORD.items[ORD.items.length-1].y*S,DMUT,null,0.6);
   }
   return e+'</svg>';
 }
