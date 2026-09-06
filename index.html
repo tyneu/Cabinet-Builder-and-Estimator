@@ -3514,7 +3514,13 @@ function sheetSVG(panel,board){
   const vw=M+W+RM, vh=TOP+H+BOT;
   const TF={inventory:'#dcedc8',keep:'#ececec',trash:'#f7d6d6'};
   const TS={inventory:'#8bb99a',keep:'#b0b0b0',trash:'#d99999'};
-  let e='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+vw+' '+vh+'" font-family="-apple-system,Arial,sans-serif">';
+  /* In the print pack every board svg is given the same height, and a board whose
+     drawing is narrower than that box gets letterboxed. Centred, that floats each
+     board to a different height down the page; pinned to the top of its box they all
+     start on the same line. */
+  let e='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+vw+' '+vh+'"'+
+    (board?' preserveAspectRatio="xMidYMin meet"':'')+
+    ' font-family="-apple-system,Arial,sans-serif">';
   e+='<rect x="'+M+'" y="'+TOP+'" width="'+W+'" height="'+H+'" fill="#fbfbfb" stroke="#000" stroke-width="2"/>';
   for(const pl of panel.placements){
     if(pl.kind==='cut-line') continue;
