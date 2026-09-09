@@ -577,6 +577,9 @@ body.printing .wrap{padding-bottom:120px}
           <div class="fieldnote" style="grid-column:1/-1;margin:0 0 2px">Sheet thicknesses live on the material now &mdash; set each one on its own record under <b>Materials</b> on the home screen, so a sheet that measures 0.70 can say so without moving every other 3/4 sheet with it.</div>
           <div><label>Saw kerf</label><input id="kerf" inputmode="text" value="1/8"></div>
           <div><label>Round widths to</label><input id="width_round" inputmode="text" value="1/8"></div>
+          <div><label>Box stock</label><select id="box_stock"></select></div>
+          <div><label>Back panel stock</label><select id="back_stock"></select></div>
+          <div><label>Shelf stock</label><select id="shelf_stock"></select></div>
           <div><label>Carcass dado depth</label><input id="carcass_dado_depth" inputmode="text" value="1/4"></div>
           <div><label>Shelf clearance/side</label><input id="shelf_clearance" inputmode="text" value="1/16"></div>
         </div>
@@ -629,6 +632,7 @@ body.printing .wrap{padding-bottom:120px}
           <div><label>Max section length</label><input id="toe_kick_max_section" inputmode="text" value="96"></div>
           <div><label>Extra rung if cab over</label><input id="toe_kick_cross_span" inputmode="text" value="24"></div>
           <div><label>Face board</label><select id="toe_kick_face"></select></div>
+          <div><label>Base stock</label><select id="toe_kick_stock"></select></div>
           <div><label>Runner stock</label><select id="toe_kick_runner_stock"></select></div>
           <div><label>Runner width</label><input id="toe_kick_runner_width" inputmode="text" value="3"></div>
         </div>
@@ -1339,10 +1343,19 @@ function fitRect(rects,L,S){
   }
   return best;
 }
+/* The two leftovers either side of a placement have to be disjoint. A full-height
+   strip to the right AND a full-width strip below overlap in the bottom-right corner,
+   and both were offered for reuse — so two parts could be placed in the same square
+   inches and the cut plan looked fine. One of the two edges has to give way, which is
+   what a guillotine cut actually does: the split runs either across or down, not both.
+   Split along whichever leaves the larger single piece. */
 function splitRect(rects,f){
   rects.splice(f.i,1);
   const occW=Math.min(f.w+KERF,f.rw), occH=Math.min(f.h+KERF,f.rh);
-  const cands=[[f.rx+occW,f.ry,f.rw-occW,f.rh],[f.rx,f.ry+occH,f.rw,f.rh-occH]];
+  const restW=f.rw-occW, restH=f.rh-occH;
+  const cands=(restW*f.rh>=restH*f.rw)
+    ? [[f.rx+occW,f.ry,restW,f.rh],[f.rx,f.ry+occH,occW,restH]]   // cut down the right
+    : [[f.rx+occW,f.ry,restW,occH],[f.rx,f.ry+occH,f.rw,restH]];  // cut across the bottom
   for(const [x,y,w,h] of cands)
     if(w>=MIN_SCRAP_DIM-EPS&&h>=MIN_SCRAP_DIM-EPS) rects.push([x,y,w,h]);
 }
@@ -1588,8 +1601,10 @@ function parseFrac(s){
   if(!s) return null;
   let m;
   if((m=s.match(/^(-?\d+)\s+(\d+)\/(\d+)$/))) return (+m[1]<0?-1:1)*(Math.abs(+m[1])+(+m[2])/(+m[3]));
-  if((m=s.match(/^(-?\d+)\/(\d+)$/))) return (+m[1])/(+m[2]);
-  if((m=s.match(/^-?\d*\.?\d+$/))) return parseFloat(s);
+  /* A zero denominator gave Infinity, which passes every null and NaN check
+     downstream and then propagates through every deduction. */
+  if((m=s.match(/^(-?\d+)\/(\d+)$/))) return (+m[2])===0?NaN:(+m[1])/(+m[2]);
+  if((m=s.match(/^-?\d*\.?\d+$/))){ const v=parseFloat(s); return Number.isFinite(v)?v:NaN; }
   return NaN;
 }
 function fmt(n,den){
@@ -1668,7 +1683,7 @@ const state={
   lower:{n:0,cabs:[],gaps:[],divs:[],left:'',right:'',fitL:false,fitR:false,def:{h:'',w:'',d:'24',s:'1',i:'Shelves',b:'Yes',c:'Face frame',m:'Overlay',sp:'No',al:'Top',ffw:'',ffsrc:'',dw:'',dsrc:'',fw:'',fsrc:'',dov:''}}
 };
 const CFG_SECTIONS={
-  'Plywood & saw':['kerf','width_round',
+  'Plywood & saw':['box_stock','back_stock','shelf_stock','kerf','width_round',
                    'carcass_dado_depth','shelf_clearance'],
   'Carcass & run':['left_gap','right_gap'],
   'Upper cabinets':['upper_panel_inset','upper_topbottom_depth_deduction','shelf_depth_deduction',
@@ -1677,7 +1692,7 @@ const CFG_SECTIONS={
                     'lower_stretcher_height',
                     'lower_stretcher_qty','lower_third_drop','toe_kick_height','countertop_thickness'],
   'Toe kick base':['toe_kick_depth','toe_kick_back_setback','toe_kick_max_section',
-                   'toe_kick_cross_span','toe_kick_face','toe_kick_runner_stock','toe_kick_runner_width'],
+                   'toe_kick_cross_span','toe_kick_face','toe_kick_stock','toe_kick_runner_stock','toe_kick_runner_width'],
   'Face frame':['face_frame_width','ff_stock','ff_lumber','face_frame_thickness','stock_width','stock_length',
                 'lower_rail_width','upper_top_overhang_ceiling',
                 'upper_top_overhang_open','upper_bottom_overhang','lower_top_overhang','lower_bottom_overhang'],
@@ -1692,22 +1707,44 @@ const CFG_KEYS=Object.values(CFG_SECTIONS).flat();
 /* nominal sheet stock -> the actual thickness recorded under Plywood & saw */
 /* Which sheet each choice means. Thickness comes off that material's own record, so
    a sheet that measures 0.70 can be told to and only that one changes. */
-const STOCK={'3/4':'PF 3/4','1/2':'PF 1/2','1/4':'PF 1/4'};
+/* Nominal thicknesses are gone: a part is made of a material, and that material's own
+   thickness is what every measurement is figured on. Older jobs stored 3/4, 1/2 or 1/4
+   and are read as the plywood they used to mean. */
+const NOMINAL={'3/4':'PF 3/4','1/2':'PF 1/2','1/4':'PF 1/4'};
+/* Substituting silently would change part thicknesses with nothing to show for it, so
+   every swap is recorded and reported on the build. */
+let MAT_SWAPS=[];
+const sheetName=v=>{
+  const n=NOMINAL[v]||v;
+  if(allMats().some(m=>m.name===n&&m.kind==='sheet')) return n;
+  const fb=(matsOfKind('sheet')[0]||{}).name;
+  if(fb&&n&&!MAT_SWAPS.some(x=>x.from===n)) MAT_SWAPS.push({from:n,to:fb});
+  return fb||n;
+};
+/* What each part was made of before it became a choice, so an untouched job is cut
+   exactly as it always was. */
+const SHEET_DEFAULT={box_stock:'PF 3/4', back_stock:'PF 1/4', shelf_stock:'PF 3/4',
+  drawer_side_stock:'PF 3/4', drawer_bottom_stock:'PF 1/2',
+  toe_kick_runner_stock:'PF 3/4', toe_kick_stock:'PF 3/4', door_panel_stock:'MDF 1/2'};
 /* Rail and stile widths. Sticks only come 2" wide, so anything wider has to be
    ripped from a board. */
 const RS_WIDTHS=['2','2 1/2','3'];
 const RS_STOCK=['Sticks','Boards'];
 const CFG_SELECTS={face_frame_width:RS_WIDTHS,door_width:RS_WIDTHS,front_width:RS_WIDTHS,
   ff_stock:RS_STOCK,door_stock:RS_STOCK,front_stock:RS_STOCK,
-  drawer_side_stock:['3/4','1/2','1/4'],drawer_bottom_stock:['1/2','1/4','3/4'],
-  toe_kick_face:['Yes','No'], toe_kick_runner_stock:['3/4','1/2','1/4'],
-  door_panel_stock:['MDF 1/2','MDF 1/4','PF 1/4'],
+  toe_kick_face:['Yes','No'],
+  /* Anything a sheet good can be. Filled from the material registry, so adding a
+     material offers it everywhere at once. */
+  box_stock:'sheet', back_stock:'sheet', shelf_stock:'sheet', toe_kick_stock:'sheet',
+  drawer_side_stock:'sheet', drawer_bottom_stock:'sheet',
+  toe_kick_runner_stock:'sheet', door_panel_stock:'sheet',
   /* Filled from the material registry, so a lumber type added there shows up in every
      run's picker without being listed twice. */
   ff_lumber:'lumber', door_lumber:'lumber', front_lumber:'lumber'};
 /* Every lumber type, plus anything solid already sitting on the rack. Offcuts saved
    before lumber was its own kind still name their old material, and a picker that did
    not offer it would leave that stock unreachable. */
+const sheetNames=()=>matsOfKind('sheet').map(m=>m.name);
 const lumberNames=()=>{
   /* What is on the rack comes first, so the default pick is stock actually owned.
      Offcuts saved before lumber was its own kind still name their old material, and a
@@ -1767,11 +1804,13 @@ function initStockSelects(){
   for(const [id,spec] of Object.entries(CFG_SELECTS)){
     const el=document.getElementById(id);
     if(!el) continue;
-    const opts=spec==='lumber'?lumberNames():spec;
+    const opts=spec==='lumber'?lumberNames():spec==='sheet'?sheetNames():spec;
+    if(!opts.length) continue;
     const cur=el.value; el.innerHTML='';
-    const plain=spec==='lumber'||opts===RS_STOCK||/^(MDF|PF)/.test(opts[0]);
+    const plain=spec==='lumber'||spec==='sheet'||opts===RS_STOCK||/^(MDF|PF)/.test(opts[0]);
     for(const o of opts) el.append(new Option(plain?o:o+'"',o));
-    el.value=opts.includes(cur)?cur:opts[0];
+    const fb=spec==='sheet'?(SHEET_DEFAULT[id]||opts[0]):opts[0];
+    el.value=opts.includes(cur)?cur:(opts.includes(fb)?fb:opts[0]);
   }
   syncStockSources();
 }
@@ -2555,13 +2594,19 @@ function readCfg(){
       cfg[k]=v;
     }
   // resolve nominal stock to the actual thickness from the top section
-  cfg.drawer_side_thickness=matThick(STOCK[cfg.drawer_side_stock]);
-  cfg.drawer_bottom_thickness=matThick(STOCK[cfg.drawer_bottom_stock]);
+  MAT_SWAPS=[];
+  for(const k of ['box_stock','back_stock','shelf_stock','drawer_side_stock',
+                  'drawer_bottom_stock','toe_kick_stock','toe_kick_runner_stock','door_panel_stock'])
+    cfg[k]=sheetName(cfg[k]);
+  cfg.drawer_side_thickness=matThick(cfg.drawer_side_stock);
+  cfg.drawer_bottom_thickness=matThick(cfg.drawer_bottom_stock);
   /* Deductions are calculated, never typed — they all fall out of the actual
      sheet thickness, so changing 23/32 to a true 3/4 moves them automatically. */
   /* The carcass is built out of the 3/4 sheet, so its real thickness is that
      material's, not a separate figure that can drift away from it. */
-  cfg.ply_thickness=matThick(STOCK['3/4']);
+  /* The carcass is whatever the box is made of, so its real thickness is that
+     material's — 1/2" maple ply makes every box part follow it. */
+  cfg.ply_thickness=matThick(cfg.box_stock);
   /* A stick is whatever size the stick material says it is, so Stock length and width
      follow the material rather than being typed twice. */
   const st=matOf(POPLAR);
@@ -2574,7 +2619,7 @@ function readCfg(){
      Widthwise that is already the width deduction; heightwise it also loses both panel insets. */
   cfg.upper_back_height_deduction=2*cfg.upper_panel_inset+cfg.width_deduction;
   cfg.lower_back_height_deduction=2*cfg.lower_panel_inset+cfg.width_deduction;
-  cfg.toe_kick_runner_thickness=matThick(STOCK[cfg.toe_kick_runner_stock]);
+  cfg.toe_kick_runner_thickness=matThick(cfg.toe_kick_runner_stock);
   /* One width per category drives that category's rails and stiles. The lower rail
      keeps its own typed figure, because a countertop hides part of it. */
   cfg.face_frame_width=parseFrac(cfg.face_frame_width);
@@ -2596,8 +2641,7 @@ function readCfg(){
   return cfg;
 }
 const LW=(a,b)=>[r4(Math.max(a,b)),r4(Math.min(a,b))];
-const PF34='PF 3/4', PF14='PF 1/4', PF12='PF 1/2';
-const matFor=nom=>'PF '+nom;
+
 
 function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
   const insideW=W-cfg.width_deduction;
@@ -2605,23 +2649,23 @@ function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
   const p=[];
   const push=(name,mat,a,b,qty)=>{const [L,Wd]=LW(a,b); p.push({name,mat,L,W:Wd,qty});};
   if(typ==='upper'){
-    push('Side Panel',PF34,H,D,2);
-    push('Top & Bottom',PF34,insideW,D-cfg.upper_topbottom_depth_deduction,2);
-    push('Stretchers',PF34,insideW,cfg.upper_stretcher_height,Math.round(cfg.upper_stretcher_qty));
-    push('Back Panel',PF14,insideW,H-cfg.upper_back_height_deduction,1);
-    if(shelves>0) push('Adjustable Shelf',PF34,W-cfg.shelf_width_deduction,D-cfg.shelf_depth_deduction,shelves);
+    push('Side Panel',cfg.box_stock,H,D,2);
+    push('Top & Bottom',cfg.box_stock,insideW,D-cfg.upper_topbottom_depth_deduction,2);
+    push('Stretchers',cfg.box_stock,insideW,cfg.upper_stretcher_height,Math.round(cfg.upper_stretcher_qty));
+    push('Back Panel',cfg.back_stock,insideW,H-cfg.upper_back_height_deduction,1);
+    if(shelves>0) push('Adjustable Shelf',cfg.shelf_stock,W-cfg.shelf_width_deduction,D-cfg.shelf_depth_deduction,shelves);
   }else{
     const boxH=H-cfg.toe_kick_height-cfg.countertop_thickness;
     const kind=interior||'Shelves';
     const back=hasBack!==false;
     const faceFrame=constr==='Face frame';
     const shelfDepthDed=back?cfg.lower_shelf_depth_back:cfg.lower_shelf_depth_noback;
-    push('Side Panel',PF34,boxH,D,2);
-    push('Bottom',PF34,insideW,D,1);   // full depth, back panel or not
-    push('Stretchers',PF34,insideW,cfg.lower_stretcher_height,Math.round(cfg.lower_stretcher_qty));
-    if(back) push('Back Panel',PF14,insideW,boxH-cfg.lower_back_height_deduction,1);
+    push('Side Panel',cfg.box_stock,boxH,D,2);
+    push('Bottom',cfg.box_stock,insideW,D,1);   // full depth, back panel or not
+    push('Stretchers',cfg.box_stock,insideW,cfg.lower_stretcher_height,Math.round(cfg.lower_stretcher_qty));
+    if(back) push('Back Panel',cfg.back_stock,insideW,boxH-cfg.lower_back_height_deduction,1);
     if(kind==='Shelves'&&shelves>0)
-      push('Adjustable Shelf',PF34,W-cfg.shelf_width_deduction,D-shelfDepthDed,shelves);
+      push('Adjustable Shelf',cfg.shelf_stock,W-cfg.shelf_width_deduction,D-shelfDepthDed,shelves);
     if(kind==='Drawers'&&shelves>0){
       const n=shelves, t=cfg.drawer_side_thickness, dd=cfg.drawer_dado_depth;
       const openW=faceFrame?(W-cfg.face_frame_width):(W-2*cfg.ply_thickness);
@@ -2630,7 +2674,7 @@ function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
       const availD=D-(back?cfg.drawer_depth_back:cfg.drawer_depth_noback)+gain;
       const boxD=pickSlide(availD,cfg.slide_lengths).len;
       const fbLen=boxW-cfg.drawer_fb_deduction;
-      const sideMat=matFor(cfg.drawer_side_stock), botMat=matFor(cfg.drawer_bottom_stock);
+      const sideMat=cfg.drawer_side_stock, botMat=cfg.drawer_bottom_stock;
       /* Each box follows its own front. A 12" front and a 6" front can't share a
          box height, so the heights come from the same split the fronts use. */
       const S=frontSpan(typ,W,H,constr,mount,cfg);
@@ -2654,7 +2698,9 @@ function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
 }
 
 const POPLAR='Poplar 2x3/4';
-const FFMAT=POPLAR, DOORMAT=POPLAR;
+/* Resolved at build time rather than baked in, so renaming the stick moves the parts
+   with it instead of orphaning them. */
+const stickMat=()=>{ const s2=matsOfKind('stick'); return s2.length?s2[0].name:POPLAR; };
 /* A run is one segment unless divides break it. Face frames and toe kicks are
    built per segment, so an appliance opening splits them properly. */
 function runSegments(R){
@@ -2679,8 +2725,11 @@ function packSticks(items,stockLen,kerf,stockW){
     for(let i=0;i<it.qty;i++)
       pieces.push({name:it.name,cab:it.cab,len:it.L,width:it.W,rip:r4(stockW-it.W)});
   pieces.sort((a,b)=>b.len-a.len);
-  const sticks=[];
+  const sticks=[]; const unplaced=[];
   for(const p of pieces){
+    /* A piece longer than the stock, or wider than it, has nowhere to go. It used to
+       open a new stick and record used:100 on a 96" stick — a cut nobody can make. */
+    if(p.len>stockLen+1e-9||p.width>stockW+1e-9){ unplaced.push(p); continue; }
     let best=null;
     for(const s of sticks){
       const need=s.cuts.length?kerf+p.len:p.len;
@@ -2692,6 +2741,7 @@ function packSticks(items,stockLen,kerf,stockW){
     if(best){ best.s.used=r4(best.s.used+best.need); best.s.cuts.push(p); }
     else sticks.push({used:r4(p.len),cuts:[p]});
   }
+  sticks.unplaced=unplaced;
   return sticks;
 }
 
@@ -2706,13 +2756,13 @@ function shakerParts(tag,label,w,h,qty,cfg){
   const p=[];
   const push=(name,mat,x,y,q)=>{const [L,W]=LW(x,y);
     const part={cab:tag,name,mat,L,W,qty:q,grp:'door'};
-    if(mat===DOORMAT&&(src==='Boards'||W>cfg.stock_width+1e-9)){
+    if(mat===stickMat()&&(src==='Boards'||W>cfg.stock_width+1e-9)){
       part.wide=true;
       part.lumber=front?cfg.front_lumber:cfg.door_lumber;
     }
     p.push(part);};
-  push(label+' Stile',DOORMAT,h,s,2*qty);
-  push(label+' Rail',DOORMAT,w-2*s+2*dd,rw,2*qty);
+  push(label+' Stile',stickMat(),h,s,2*qty);
+  push(label+' Rail',stickMat(),w-2*s+2*dd,rw,2*qty);
   push(label+' Panel',cfg.door_panel_stock,w-2*s+2*dd-cl,h-2*rw+2*dd-cl,qty);
   return p;
 }
@@ -2810,7 +2860,9 @@ const snap16=v=>Math.round(v*16)/16;
 function toeKickParts(R,cfg){
   const N=R.cabs.length;
   if(!N) return null;
-  const t=cfg.ply_thickness;
+  /* The kick is hidden under the cabinet, so it is built from whatever the base stock
+     says rather than following an expensive box material up. */
+  const t=matThick(cfg.toe_kick_stock);
   const faceThk=cfg.toe_kick_face==='Yes'?t:0;
   const H=cfg.toe_kick_height;
   const runThk=cfg.toe_kick_runner_thickness;
@@ -2822,7 +2874,8 @@ function toeKickParts(R,cfg){
   const M=cfg.toe_kick_max_section;
   const parts=[], info=[], agg={};
   const add=(name,a2,b2,qty)=>{const [L,W]=LW(a2,b2);const key=name+'|'+L+'|'+W;
-    agg[key]=agg[key]||{cab:'TK',name,mat:'PF 3/4',L,W,qty:0}; agg[key].qty+=qty;};
+    agg[key]=agg[key]||{cab:'TK',name,mat:/Runner/.test(name)?cfg.toe_kick_runner_stock:cfg.toe_kick_stock,
+                        L,W,qty:0}; agg[key].qty+=qty;};
 
   /* A segment is further divided wherever the kick plate number changes. Consecutive
      blanks stay together and get the automatic sectioning; a run of cabinets sharing
@@ -2931,7 +2984,7 @@ function faceFrameSeg(run,R,seg,cfg,tag,fit){
   const frameH=carcH+topOH+botOH;
   const p=[];
   const push=(name,a,b,qty)=>{const [L,W]=LW(a,b);
-    const part={cab:tag,name,mat:FFMAT,L,W,qty,grp:'ff'};
+    const part={cab:tag,name,mat:stickMat(),L,W,qty,grp:'ff'};
     if(cfg.ff_stock==='Boards'||W>cfg.stock_width+1e-9){
       part.wide=true; part.lumber=cfg.ff_lumber;
     }
@@ -3110,6 +3163,12 @@ function build(){
   let cfg;
   try{ cfg=readCfg(); }catch(e){ return toast(e.message); }
   const errs=[], runs={}, warns=[];
+  /* A material this job names is no longer on the list. It has been substituted so the
+     job still builds, but the parts are a different thickness than they were. */
+  for(const sw of MAT_SWAPS)
+    warns.push('"'+sw.from+'" is no longer in your materials, so those parts were cut '+
+      'from "'+sw.to+'" instead \u2014 at '+fmt(matThick(sw.to))+'" rather than what they were. '+
+      'Check the sizes, or put the material back.');
   for(const r of RUNS){
     if(!include[r].on) continue;
     const s=solveRun(r,cfg);
@@ -3238,14 +3297,21 @@ function build(){
     const stock=loadOffcuts();
     let banked=[];
     for(const g of groups){
-      g.sheetParts=g.parts.filter(p=>!LINEAR_MATS.includes(p.mat));
-      g.linearParts=g.parts.filter(p=>LINEAR_MATS.includes(p.mat));
+      /* Asked of the material, not of a name list built at load. A renamed material
+         would fall out of that list and its parts would be nested on plywood. */
+      g.sheetParts=g.parts.filter(p=>matKind(p.mat)!=='stick');
+      g.linearParts=g.parts.filter(p=>matKind(p.mat)==='stick');
       /* Anything wider than the stock can't come off a stick, so it is listed on its
          own rather than nested — the rip strip maths would go negative. */
       g.wideParts=g.linearParts.filter(p=>p.wide);
       const stickable=g.linearParts.filter(p=>!p.wide);
-      if(stickable.length)
+      if(stickable.length){
         g.sticks=packSticks(stickable,cfg.stock_length,cfg.kerf,cfg.stock_width);
+        for(const u of (g.sticks.unplaced||[]))
+          warns.push(g.label+': '+u.name+' at '+fmt(u.len)+'" \u00d7 '+fmt(u.width)+
+            '" does not fit a '+fmt(cfg.stock_length)+'" \u00d7 '+fmt(cfg.stock_width)+
+            '" stick, so it is not on any cut map. Cut it from a board or change the stock.');
+      }
       /* Board parts always look at the boards on hand — the pull-from-rack setting
          governs sheet and stick offcuts, not solid stock you already own. */
       if(g.wideParts.length){
@@ -3265,7 +3331,13 @@ function build(){
              a lumber offcut. Only sheets are excluded. */
           packBoards(list,stock.filter(o=>matKind(o.material)!=='sheet'&&
                                           (!mat||o.material===mat))));
-        g.boards={panels:[].concat(...packs.map(x=>x.panels)),
+        /* Kept per species so the estimate can charge each its own rate. */
+        const scrapByMat={};
+        [...byLum.keys()].forEach((mat,i)=>{
+          const n=mat||DEF_LUMBER;
+          scrapByMat[n]=(scrapByMat[n]||0)+packs[i].scrapArea;
+        });
+        g.boards={scrapByMat,panels:[].concat(...packs.map(x=>x.panels)),
                   boardsUsed:packs.reduce((a,x)=>a+x.boardsUsed,0),
                   unplaced:[].concat(...packs.map(x=>x.unplaced)),
                   segMax:RIP_MAX,
@@ -3290,6 +3362,12 @@ function build(){
         g.useOff=offSet('off_use_',g.key);
         g.logOff=offSet('off_log_',g.key);
         g.nest=runNesting(g.sheetParts,cfg,(g.useOff?stock:[]).concat(g.logOff?banked:[]));
+        /* runNesting has always collected parts too big for any sheet; nothing read the
+           list, so a 100" part simply vanished from the cut map with no sheet raised. */
+        for(const m of g.nest.materials)
+          for(const o of (m.oversize||[]))
+            warns.push(g.label+': '+(o.name||'a part')+' at '+fmt(o.L)+'" \u00d7 '+fmt(o.S)+
+              '" is bigger than a sheet of '+m.material+', so it is not on any cut map.');
         if(!g.logOff) g.nest.banked=[];
         banked=banked.concat(g.nest.banked);
       }catch(e){ console.error(e); toast('Nesting hit a snag — cut list is still good.'); }
@@ -3865,11 +3943,12 @@ function estCounts(R){
       bucket(n).net+=p.L*p.W*p.qty*matThick(n)/144;
     }
     /* Scrap the layout makes is bought and thrown away, so it has to be paid for.
-       Keepers go back on the rack and are not. */
-    if(g.boards&&g.boards.scrapArea){
-      const n=(g.wideParts&&g.wideParts[0]&&g.wideParts[0].lumber)||DEF_LUMBER;
-      bucket(n).scrap+=g.boards.scrapArea*matThick(n)/144;
-    }
+       Keepers go back on the rack and are not. Charged to the species that made it —
+       taking the first wide part's lumber for the whole group made the split depend on
+       part order and mispriced both when two species were in one job. */
+    if(g.boards&&g.boards.scrapByMat)
+      for(const [n,area] of Object.entries(g.boards.scrapByMat))
+        bucket(n).scrap+=area*matThick(n)/144;
     /* Cutting parts to length is charged per stick. Milling instead of buying used to
        drop that count to zero and lose the time with it, though the crosscutting still
        happens — so a milled run counts the stick-lengths of stock it works through. */
@@ -3977,9 +4056,13 @@ function buildEstimate(R){
   addHw('Shelf pins',c.shelf,est.hw.pin);
   const primerGal=F.fin_primer_cov>0?area*primerCoats/F.fin_primer_cov:0;
   const paintGal=F.fin_paint_cov>0?area*paintCoats/F.fin_paint_cov:0;
-  if(primerGal>0) hwRows.push({name:'Primer · '+primerCoats+' coat'+(primerCoats>1?'s':''),qty:primerGal.toFixed(2)+' gal',
+  /* rawQty is the unrounded need. The shopping list has to buy whole gallons off this,
+     not off a figure already rounded to two decimals — 1.004 gallons must buy two. */
+  if(primerGal>0) hwRows.push({name:'Primer · '+primerCoats+' coat'+(primerCoats>1?'s':''),
+    qty:primerGal.toFixed(2)+' gal',rawQty:primerGal,
     price:F.fin_primer_price,cost:primerGal*F.fin_primer_price});
-  if(paintGal>0) hwRows.push({name:'Paint · '+paintCoats+' coat'+(paintCoats>1?'s':''),qty:paintGal.toFixed(2)+' gal',
+  if(paintGal>0) hwRows.push({name:'Paint · '+paintCoats+' coat'+(paintCoats>1?'s':''),
+    qty:paintGal.toFixed(2)+' gal',rawQty:paintGal,
     price:F.fin_paint_price,cost:paintGal*F.fin_paint_price});
   const hwCost=hwRows.reduce((a,r)=>a+r.cost,0);
 
@@ -4639,14 +4722,32 @@ function paintProjBar(){
   const el=document.getElementById('projName');
   if(el) el.textContent=currentProject();
 }
+/* Both rename paths assigned the destination key before checking whether anything was
+   already there, so renaming A onto an existing B destroyed B and dropped A. One
+   helper, one guard, and the write happens before the current-project pointer moves. */
+function applyRename(from,to){
+  from=String(from); to=String(to).trim();
+  if(!to||to===from) return false;
+  const all=projList();
+  if(!all[from]) return false;
+  if(Object.keys(all).some(k=>k!==from&&k.toLowerCase()===to.toLowerCase())) return 'exists';
+  all[to]=all[from]; delete all[from];
+  try{ localStorage.setItem(PKEY,JSON.stringify(all)); }
+  catch(e){ return false; }                       // nothing moves if the write failed
+  if(currentProject()===from) setCurrentProject(to);
+  return true;
+}
+
 async function renameProject(){
   const cur=currentProject();
   const n=await uiPrompt('Project name','This is what the job is saved and printed under.',cur,'Kitchen for…');
   if(n===null) return;
   const name=n.trim(); if(!name) return;
-  const all=projList();
-  if(all[cur]&&name!==cur){ all[name]=all[cur]; delete all[cur]; localStorage.setItem(PKEY,JSON.stringify(all)); }
-  setCurrentProject(name);
+  if(name!==cur&&projList()[cur]){
+    const r=applyRename(cur,name);
+    if(r==='exists') return toast('There is already a project called "'+name+'". Pick another name.');
+    if(!r) return toast('Could not rename the project.');
+  }else setCurrentProject(name);
   save();
   if(projList()[name]) projSave(name);
   toast('Renamed to "'+name+'".',true);
@@ -4874,14 +4975,28 @@ function viewShopping(body,sum){
     }
     return s+'</tbody></table></div></div>';
   };
+  /* Sizes come off the material now, so a 60x60 sheet must not be ordered as 4x8. */
+  const sheetSize=n=>{ const m=matOf(n);
+    return m?fmt(m.l)+'\u00d7'+fmt(m.w):''; };
   const sheets=e.matRows.filter(r=>r.unit==='sheet')
-    .map(r=>({name:r.name,qty:r.qty+' sheet'+(r.qty>1?'s':'')+' 4×8',cost:r.cost}));
+    .map(r=>({name:r.name,qty:r.qty+' sheet'+(r.qty>1?'s':'')+
+      (sheetSize(r.name)?' '+sheetSize(r.name):''),cost:r.cost}));
   const sticks=e.matRows.filter(r=>r.unit==='stick')
     .map(r=>({name:r.name,qty:r.qty+' stick'+(r.qty>1?'s':'')+' at '+fmt(cfg.stock_length)+'"',cost:r.cost}));
+  /* Rough lumber was priced in the estimate but filtered out of the shopping list, so a
+     job with milled frames or doors went to the yard with its lumber missing. */
+  const lumber=e.matRows.filter(r=>r.unit==='board ft')
+    .map(r=>({name:r.name.split(' \u00b7 ')[0],qty:r.qty+' bd ft',cost:r.cost}));
   const hw=e.hwRows.filter(r=>!/Primer|Paint/.test(r.name))
     .map(r=>({name:r.name,qty:r.qty,cost:r.cost}));
-  const paint=e.hwRows.filter(r=>/Primer|Paint/.test(r.name))
-    .map(r=>({name:r.name,qty:Math.ceil(parseFloat(r.qty))+' gal to buy ('+r.qty+' used)',cost:r.cost}));
+  /* The list showed gallons rounded up but carried the cost of the fraction used, so
+     2 gallons to buy was added to the total at the price of 1.2. */
+  const paint=e.hwRows.filter(r=>/Primer|Paint/.test(r.name)).map(r=>{
+    const used=r.rawQty!=null?r.rawQty:parseFloat(r.qty);
+    const buy=Math.ceil(used-1e-9);
+    return {name:r.name,qty:buy+' gal to buy ('+(Math.round(used*100)/100)+' used)',
+            cost:buy*(r.price||0)};
+  });
   const slides={};
   for(const c of RESULT.cabs){
     if(c.run!=='lower'||c.interior!=='Drawers'||!c.shelves) continue;
@@ -4896,11 +5011,12 @@ function viewShopping(body,sum){
   let h='';
   h+=sect('Sheet goods',sheets);
   h+=sect('Solid stock',sticks);
+  h+=sect('Rough lumber',lumber);
   h+=sect('Slides by length',slideRows);
   h+=sect('Hardware',hw);
   h+=sect('Finish',paint);
   h+=finishEditor();
-  sum.innerHTML='<div>Lines<b>'+(sheets.length+sticks.length+hw.length+paint.length+slideRows.length)+
+  sum.innerHTML='<div>Lines<b>'+(sheets.length+sticks.length+lumber.length+hw.length+paint.length+slideRows.length)+
     '</b></div><div>Materials total<b>'+$(total)+'</b></div>';
   h+='<div class="esttot"><span>To buy</span><b>'+$(total)+'</b></div>';
   h+='<div class="hint">Paint and primer are rounded up to whole gallons for buying. Slide counts are pairs, grouped by the length each cabinet needs.</div>';
@@ -5113,8 +5229,11 @@ function applyMaster(m){
   if(m.cfg) for(const k of CFG_KEYS){
     const el=document.getElementById(k);
     if(el&&m.cfg[k]!=null){
-      if(CFG_SELECTS[k]){ const o=CFG_SELECTS[k]==='lumber'?lumberNames():CFG_SELECTS[k];
-        el.value=o.includes(m.cfg[k])?m.cfg[k]:o[0]; }
+      if(CFG_SELECTS[k]){ const sp=CFG_SELECTS[k];
+        const o=sp==='lumber'?lumberNames():sp==='sheet'?sheetNames():sp;
+        const v=sp==='sheet'?sheetName(m.cfg[k]):m.cfg[k];
+        const fb=sp==='sheet'?(SHEET_DEFAULT[k]||o[0]):o[0];
+        el.value=o.includes(v)?v:(o.includes(fb)?fb:o[0]); }
       else el.value=m.cfg[k];
     }
   }
@@ -5251,9 +5370,9 @@ function renderHome(){
     ren.onclick=async()=>{
       const nn=await uiPrompt('Rename project',null,n,'Kitchen for…');
       if(nn===null||!nn.trim()||nn.trim()===n) return;
-      const l=projList(); l[nn.trim()]=l[n]; delete l[n];
-      localStorage.setItem(PKEY,JSON.stringify(l));
-      if(currentProject()===n) setCurrentProject(nn.trim());
+      const r=applyRename(n,nn.trim());
+      if(r==='exists') return toast('There is already a project called "'+nn.trim()+'". Pick another name.');
+      if(!r) return toast('Could not rename the project.');
       renderHome(); toast('Renamed to "'+nn.trim()+'".',true);
     };
     const btns=document.createElement('div'); btns.style.cssText='display:flex;gap:6px';
@@ -5388,19 +5507,79 @@ const matsOfKind=k=>allMats().filter(m=>m.kind===k);
 const matPrice=n=>est.prices[n]??MAT_DEFAULT_PRICE[n]??0;
 /* A board foot is 144 cubic inches of one-inch stock, so thickness scales it. */
 const matThick=n=>{ const m=matOf(n); return m&&m.t>0?m.t:1; };
+/* A material's name is its key: parts are stamped with it, the rack names it, prices
+   are filed under it and every saved project stores it in its own settings. Renaming
+   has to move all of that together, or a reference dangles and the material quietly
+   becomes something else. Nothing here is frozen at load, so the swap is complete. */
+const RENAME_KEYS=['box_stock','back_stock','shelf_stock','drawer_side_stock',
+  'drawer_bottom_stock','toe_kick_runner_stock','toe_kick_stock','door_panel_stock',
+  'ff_lumber','door_lumber','front_lumber'];
+function renameMaterial(from,to){
+  from=String(from); to=String(to).trim();
+  if(!to||to===from) return false;
+  if(allMats().some(m=>m.name.toLowerCase()===to.toLowerCase())) return 'exists';
+  const swap=cfg=>{ if(!cfg) return false; let hit=false;
+    for(const k of RENAME_KEYS) if(cfg[k]===from){ cfg[k]=to; hit=true; } return hit; };
+
+  // the material record, whether it shipped with the app or was added
+  const mats=loadMats();
+  const rec=mats.find(m=>m.name===from);
+  if(rec) rec.name=to;
+  else { const b=BUILTIN_MATS.find(m=>m.name===from);
+         if(b) mats.push({name:to,kind:b.kind,l:b.l,w:b.w,t:b.t}); }
+  BUILTIN_RENAMED[from]=to;
+  try{ localStorage.setItem(MRENAME,JSON.stringify(BUILTIN_RENAMED)); }catch(e){}
+  if(!saveMats(mats)) return false;
+
+  // the rack
+  const rack=loadOffcuts(); let touched=false;
+  for(const o of rack) if(o.material===from){ o.material=to; touched=true; }
+  if(touched) saveOffcuts(rack);
+
+  // prices, on this project and on the shop defaults
+  if(est.prices[from]!=null){ est.prices[to]=est.prices[from]; delete est.prices[from]; saveEst(); }
+
+  // every saved project's settings, the open job, and the shop defaults
+  try{
+    const all=JSON.parse(localStorage.getItem(PKEY)||'{}'); let any=false;
+    for(const nm in all){
+      try{ const j=JSON.parse(all[nm].job);
+           if(swap(j.cfg)){ all[nm].job=JSON.stringify(j); any=true; } }catch(e){}
+    }
+    if(any) localStorage.setItem(PKEY,JSON.stringify(all));
+  }catch(e){}
+  const m=readMaster();
+  if(m){ let hit=swap(m.cfg);
+    if(m.est&&m.est.prices&&m.est.prices[from]!=null){
+      m.est.prices[to]=m.est.prices[from]; delete m.est.prices[from]; hit=true; }
+    if(hit) writeMaster(m);
+  }
+
+  // and the fields open right now
+  for(const k of RENAME_KEYS){ const el=document.getElementById(k);
+    if(el){ for(const o of el.options) if(o.value===from){ o.value=to; o.textContent=to; }
+            if(el.value===from) el.value=to; } }
+  return true;
+}
+
 function saveMats(list){
   try{ localStorage.setItem(MATKEY,JSON.stringify(list)); return true; }
   catch(e){ toast('Storage is full — export a backup first.'); return false; }
 }
+const MRENAME='bbcab_matrenames';
+let BUILTIN_RENAMED={};
+try{ BUILTIN_RENAMED=JSON.parse(localStorage.getItem(MRENAME)||'{}')||{}; }catch(e){}
 function allMats(){
   const saved=loadMats();
   /* A built-in keeps its name and kind but can have its size edited, so the saved
      record overrides the shipped one where they overlap. */
-  const merged=BUILTIN_MATS.map(b=>{
+  /* A built-in that has been renamed lives on in the saved list under its new name,
+     so it must not also ship under the old one. */
+  const merged=BUILTIN_MATS.filter(b=>!BUILTIN_RENAMED[b.name]).map(b=>{
     const s2=saved.find(m=>m.name===b.name);
     return s2?{...b,l:s2.l,w:s2.w,t:s2.t}:b;
   });
-  const seen=new Set(BUILTIN_MATS.map(m=>m.name));
+  const seen=new Set(merged.map(m=>m.name));
   return merged.concat(saved.filter(m=>!seen.has(m.name)));
 }
 const isBuiltinMat=n=>BUILTIN_MATS.some(m=>m.name===n);
@@ -5473,7 +5652,7 @@ function matForm(existing){
     const inp=document.createElement('input');
     inp.className='sheetin'; inp.placeholder='Walnut 4/4';
     inp.value=existing?existing.name:'';
-    if(existing&&isBuiltinMat(existing.name)) inp.disabled=true;
+
     box.append(inp);
     const kw=document.createElement('div'); kw.innerHTML='<label>Kind</label>';
     const sel=document.createElement('select'); sel.className='sheetin';
@@ -5481,7 +5660,9 @@ function matForm(existing){
                new Option('Stick \u00b7 priced per stick','stick'),
                new Option('Lumber \u00b7 priced per board foot','lumber'));
     sel.value=existing?existing.kind:'lumber';
-    if(existing&&isBuiltinMat(existing.name)) sel.disabled=true;
+    if(existing&&isBuiltinMat(existing.name)){
+      sel.disabled=true;                       // what it is cannot change; what it is called can
+    }
     kw.append(sel); box.append(kw);
 
     /* Lumber comes in whatever length and width the yard had, so only its thickness is
@@ -5592,16 +5773,16 @@ function renderMats(){
       ed.onclick=async()=>{
         const res=await matForm(m);
         if(!res) return;
-        if(!isBuiltinMat(m.name)){
-          const next=loadMats().filter(x=>x.name!==m.name).concat([
-            {name:res.name,kind:res.kind,l:res.l,w:res.w,t:res.t}]);
-          if(!saveMats(next)) return;
-        }else{
-          /* Built-ins keep their name and kind; their size is remembered alongside. */
-          const next=loadMats().filter(x=>x.name!==m.name).concat([
-            {name:m.name,kind:m.kind,l:res.l,w:res.w,t:res.t}]);
-          if(!saveMats(next)) return;
+        if(res.name!==m.name){
+          const r=renameMaterial(m.name,res.name);
+          if(r==='exists') return toast('There is already a material called "'+res.name+'".');
+          if(!r) return;
         }
+        const nm=res.name;
+        const keepKind=isBuiltinMat(m.name)?m.kind:res.kind;   // a built-in keeps its kind
+        const next=loadMats().filter(x=>x.name!==nm&&x.name!==m.name).concat([
+          {name:nm,kind:keepKind,l:res.l,w:res.w,t:res.t}]);
+        if(!saveMats(next)) return;
         renderMats(); renderPriceRows(); initStockSelects(); toast('Material updated.',true);
       };
       btns.append(ed);
@@ -5863,10 +6044,13 @@ function load(){
     if(d.cfg[k]==null) continue;
     if(CFG_LISTS[k]){ document.getElementById(k).value=Array.isArray(d.cfg[k])?d.cfg[k].join(', '):d.cfg[k]; continue; }
     if(CFG_SELECTS[k]){ const el=document.getElementById(k); el.innerHTML='';
-      const spec=CFG_SELECTS[k], opts=spec==='lumber'?lumberNames():spec;
-      const plain=spec==='lumber'||spec===RS_STOCK||/^(MDF|PF)/.test(opts[0]);
+      const spec=CFG_SELECTS[k];
+      const opts=spec==='lumber'?lumberNames():spec==='sheet'?sheetNames():spec;
+      const plain=spec==='lumber'||spec==='sheet'||spec===RS_STOCK||/^(MDF|PF)/.test(opts[0]);
       for(const o of opts) el.append(new Option(plain?o:o+'"',o));
-      el.value=opts.includes(d.cfg[k])?d.cfg[k]:opts[0]; continue; }
+      const v=spec==='sheet'?sheetName(d.cfg[k]):d.cfg[k];
+      const fb=spec==='sheet'?(SHEET_DEFAULT[k]||opts[0]):opts[0];
+      el.value=opts.includes(v)?v:(opts.includes(fb)?fb:opts[0]); continue; }
     document.getElementById(k).value=d.cfg[k];
   }
   for(const r of RUNS) document.querySelector('.totalw[data-run="'+r+'"]').value=d.totals?.[r]||'';
