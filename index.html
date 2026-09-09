@@ -887,10 +887,10 @@ const MIN_SCRAP_DIM=TRASH_MIN_DIM;
 const FULL_UTIL=0.60, SHEET_BREAKDOWN_CUTS=2;
 const r4=v=>Math.round(v*1e6)/1e6;   // 1/32 and 1/64 need more than 4 places
 
-function orient(L,S,bw,bl,mode){
+function orient(L,S,bw,bl,mode,noRotate){
   const opts=[];
   if(S<=bw+EPS&&L<=bl+EPS) opts.push([L,S]);
-  if(L<=bw+EPS&&S<=bl+EPS) opts.push([S,L]);
+  if(!noRotate&&L<=bw+EPS&&S<=bl+EPS) opts.push([S,L]);
   if(!opts.length) return null;
   if(mode==='L_vert'&&opts.some(o=>o[0]===L&&o[1]===S)) return [L,S];
   if(mode==='S_vert'&&opts.some(o=>o[0]===S&&o[1]===L)) return [S,L];
@@ -919,7 +919,7 @@ function columnsForBin(parts,bw,bl,omap){
   for(const key of keys){
     const grp=groups.get(key);
     const mode=omap?(omap[key]||'yield'):'yield';
-    const o=orient(grp[0].L,grp[0].S,bw,bl,mode);
+    const o=orient(grp[0].L,grp[0].S,bw,bl,mode,!!grp[0].noRotate);
     if(!o) continue;
     const [ell,w]=o;
     for(let i=0;i<grp.length;i++)
@@ -977,34 +977,39 @@ function tier(w,h){
   return 'inventory';
 }
 
-function centerCut(rects){
+function centerCut(rects,stockL=SHEET_L){
   if(!rects.length) return null;
+  if(stockL<=CENTER_HI+EPS) return null;
   const partEdges=new Set();
-  for(const [x,y,w,h] of rects){ partEdges.add(r4(y)); partEdges.add(r4(y+h)); }
-  const cand=new Set([...partEdges, SHEET_L/2, CENTER_LO, CENTER_HI]);
-  for(let i=CENTER_LO*8;i<=CENTER_HI*8;i++) cand.add(i/8);
+  for(const [x,y,w,h] of rects){
+    partEdges.add(y+h);                 // put the kerf after a part
+    if(y>=KERF-EPS) partEdges.add(y-KERF); // or immediately before the next one
+  }
+  const edgeKeys=new Set([...partEdges].map(r4));
+  const cand=new Set([...partEdges, stockL/2, CENTER_LO, CENTER_HI]);
+  for(let i=CENTER_LO*8;i<=Math.min(CENTER_HI,stockL)*8;i++) cand.add(i/8);
   const valid=[];
   for(const y0 of cand){
-    if(y0<=EPS||y0>=SHEET_L-EPS) continue;
-    if(rects.some(([x,y,w,h])=>y+EPS<y0&&y0<y+h-EPS)) continue;
+    if(y0<=EPS||y0+KERF>=stockL-EPS) continue;
+    if(rects.some(([x,y,w,h])=>y<y0+KERF-EPS&&y0<y+h-EPS)) continue;
     const topParts=rects.filter(r=>r[1]+r[3]<=y0+EPS);
-    const botParts=rects.filter(r=>r[1]>=y0-EPS);
+    const botParts=rects.filter(r=>r[1]>=y0+KERF-EPS);
     const topOk=(y0<=60+EPS)||!topParts.length;
-    const botOk=((SHEET_L-y0)<=60+EPS)||!botParts.length;
+    const botOk=((stockL-y0-KERF)<=60+EPS)||!botParts.length;
     if(topOk&&botOk) valid.push(y0);
   }
   if(!valid.length) return null;
   const maxEmpty=y=>{
     const t=!rects.some(r=>r[1]+r[3]<=y+EPS)?y:0;
-    const b=!rects.some(r=>r[1]>=y-EPS)?(SHEET_L-y):0;
+    const b=!rects.some(r=>r[1]>=y+KERF-EPS)?(stockL-y-KERF):0;
     return Math.max(t,b);
   };
   valid.sort((a,b)=>{
-    const ae=partEdges.has(r4(a))?0:1, be=partEdges.has(r4(b))?0:1;
+    const ae=edgeKeys.has(r4(a))?0:1, be=edgeKeys.has(r4(b))?0:1;
     if(ae!==be) return ae-be;
     const am=maxEmpty(a), bm=maxEmpty(b);
     if(am!==bm) return bm-am;
-    return Math.abs(a-SHEET_L/2)-Math.abs(b-SHEET_L/2);
+    return Math.abs(a-stockL/2)-Math.abs(b-stockL/2);
   });
   return valid[0];
 }
@@ -1012,7 +1017,7 @@ function centerCut(rects){
 function addOffcuts(placements,bw,bl,material,cutY,noMid,tierFn){
   const dummy=[...placements];
   const obs=dummy.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-  if(cutY==null) cutY=centerCut(obs);
+  if(cutY==null) cutY=centerCut(obs,bl);
   if(cutY!=null&&!noMid){
     const barrier={name:'mid-cut-barrier',x:0,y:cutY,w:bw,h:KERF,kind:'cut-line'};
     dummy.push(barrier); placements.push(barrier);
@@ -1024,6 +1029,38 @@ function addOffcuts(placements,bw,bl,material,cutY,noMid,tierFn){
     if(t==='inventory') offs.push({material,l:Math.max(w,l),w:Math.min(w,l)});
   }
   return [placements,offs];
+}
+
+/* The column packer already owns the real, disjoint leftovers and has removed every
+   kerf from them. Keep those rectangles instead of rebuilding space from finished
+   part outlines, which made remnants larger than the wood left on the saw. */
+function offcutsFromFree(placements,free,material,tierFn){
+  const offs=[];
+  for(const [x,y,w,h] of free){
+    if(w<=EPS||h<=EPS) continue;
+    const t=(tierFn||tier)(w,h);
+    placements.push({name:'',x,y,w,h,kind:'offcut',tier:t});
+    if(t==='inventory') offs.push({material,l:r4(Math.max(w,h)),w:r4(Math.min(w,h))});
+  }
+  return [placements,offs];
+}
+
+/* A later breakdown cut can cross an existing free rectangle. Split that rectangle
+   at the full kerf so the map and every banked remnant still match the stock. */
+function applyMidCut(sh,cutY,material){
+  const out=[];
+  for(const p of sh){
+    if(p.kind!=='offcut'){ out.push(p); continue; }
+    const end=p.y+p.h, cutEnd=cutY+KERF;
+    if(end<=cutY+EPS||p.y>=cutEnd-EPS){ out.push(p); continue; }
+    const top=Math.max(0,cutY-p.y), bot=Math.max(0,end-cutEnd);
+    for(const [y,h] of [[p.y,top],[cutEnd,bot]]) if(h>EPS){
+      const t=tier(p.w,h);
+      out.push({...p,y,h,tier:t});
+    }
+  }
+  out.push({name:'mid-cut-barrier',x:0,y:cutY,w:SHEET_W,h:KERF,kind:'cut-line'});
+  return out;
 }
 
 function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
@@ -1060,20 +1097,21 @@ function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
     for(const [rx,ry,rw,rl] of (maxa(h_)>=maxa(v_)?h_:v_))
       if(rw>EPS&&rl>EPS) free.push([rx,ry,rw,rl]);
   }
-  return [placements.filter(p=>p.name!=='mid-cut-barrier'),placedCols,leftover];
+  return [placements,placedCols,leftover,free];
 }
 
 function packOneSheetDynamic(parts,material,omap){
   let best=null;
-  for(let yi=CENTER_LO*16;yi<=CENTER_HI*16;yi+=8){
+  const maxY=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
+  for(let yi=CENTER_LO*16;yi<=maxY*16;yi+=8){
     const y=yi/16, topH=y, botY=y+KERF, botH=SHEET_L-botY;
     const cols=columnsForBin(parts,SHEET_W,Math.max(topH,botH),omap);
     if(!cols.length) continue;
     const freeInit=[[0,0,SHEET_W,topH],[0,botY,SHEET_W,botH]];
-    let [pl,placedCols]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,y);
+    let [pl,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,y);
     if(!placedCols.length) continue;
     const placedCount=placedCols.reduce((a,[c])=>a+c.parts.length,0);
-    const [plo,of]=addOffcuts(pl,SHEET_W,SHEET_L,material,y,false);
+    const [plo,of]=offcutsFromFree(pl,free,material);
     const invs=plo.filter(p=>p.kind==='offcut'&&p.tier==='inventory').map(p=>p.w*p.h);
     const maxInv=invs.length?Math.max(...invs):0;
     const invArea=invs.reduce((a,b)=>a+b,0);
@@ -1105,9 +1143,9 @@ function packSheets(parts,material,omap){
     if(++guard>10000) break;
     const cols=columnsForBin(remaining,SHEET_W,SHEET_L,omap);
     if(!cols.length) break;
-    let [placements,placedCols]=guillotineColumns(cols,SHEET_W,SHEET_L,material,null,null);
+    let [placements,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,null,null);
     if(!placedCols.length) break;
-    const [pl,of]=addOffcuts(placements,SHEET_W,SHEET_L,material,null,false);
+    const [pl,of]=offcutsFromFree(placements,free,material);
     sheets.push(pl); offs.push(...of);
     const ids=new Set(placedCols.flatMap(([c])=>c.parts.map(p=>p.id)));
     remaining=remaining.filter(p=>!ids.has(p.id));
@@ -1124,9 +1162,9 @@ function packSheetsCrosscut(parts,material,cutY,omap){
     const cols=columnsForBin(remaining,SHEET_W,Math.max(topH,botH),omap);
     if(!cols.length) break;
     const freeInit=[[0,0,SHEET_W,topH],[0,botY,SHEET_W,botH]];
-    let [placements,placedCols]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,cutY);
+    let [placements,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,cutY);
     if(!placedCols.length) break;
-    const [pl,of]=addOffcuts(placements,SHEET_W,SHEET_L,material,cutY,false);
+    const [pl,of]=offcutsFromFree(placements,free,material);
     sheets.push(pl); offs.push(...of);
     const ids=new Set(placedCols.flatMap(([c])=>c.parts.map(p=>p.id)));
     remaining=remaining.filter(p=>!ids.has(p.id));
@@ -1242,7 +1280,8 @@ function bestCrosscut(parts,material,omap){
   const total=parts.length;
   if(!total) return null;
   let best=null;
-  for(let y=CENTER_LO;y<=CENTER_HI+EPS;y+=1){
+  const maxY=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
+  for(let y=CENTER_LO;y<=maxY+EPS;y+=1){
     const [sheets,offs]=packSheetsCrosscut(parts,material,y,omap);
     const placed=sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0);
     if(placed===total){
@@ -1295,12 +1334,12 @@ function chooseLayout(parts,material,budget){
   if(!scored.length) return null;
   scored.sort((a,b)=>cmpArr(a[0],b[0]));
 
-  /* Re-score the strongest candidates AFTER mixed-orientation compaction. A layout
-     that looks equal on cuts may collapse to fewer sheets once parts are allowed to
-     turn individually, so sheet count is judged on the compacted result. */
+  /* Re-score complete candidates without rebuilding free space from part outlines.
+     The base packers carry exact kerf-adjusted leftovers; the old compaction pass did
+     not, so it could fit a part into wood consumed by a saw cut. */
   const finals=[];
   for(const [key,name,sheets,m] of scored.slice(0,8)){
-    const c=compactSheets(sheets,material);
+    const c=sheets;
     const cm=layoutMetrics(c);
     finals.push([[cm.sheets,...key.slice(1)],name,c,cm]);
   }
@@ -1413,10 +1452,10 @@ function packMaterial(material,matParts,stockOffcuts,budget){
   for(const o of avail){
     if(!remaining.length) break;
     const cols=columnsForBin(remaining,o.w,o.l,null);
-    let [pl,placedCols]=guillotineColumns(cols,o.w,o.l,material,null,null);
+    let [pl,placedCols,,free]=guillotineColumns(cols,o.w,o.l,material,null,null);
     const placed=placedCols.flatMap(([c])=>c.parts);
     if(placed.length){
-      const [plo,of]=addOffcuts(pl,o.w,o.l,material,null,false);
+      const [plo,of]=offcutsFromFree(pl,free,material);
       o.used=true; used++;
       offcutPanels.push([plo,o.w,o.l]);
       newOffcuts.push(...of);
@@ -1424,7 +1463,7 @@ function packMaterial(material,matParts,stockOffcuts,budget){
       remaining=remaining.filter(p=>!done.has(p.id));
     }
   }
-  let sheets=[],strategy=null,metrics=null;
+  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize];
   if(remaining.length){
     const res=chooseLayout(remaining,material,budget);
     if(res){
@@ -1433,17 +1472,20 @@ function packMaterial(material,matParts,stockOffcuts,budget){
       for(const sh of sheets){
         if(!sh.some(p=>p.kind==='cut-line')){
           const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-          const y0=centerCut(prs);
-          if(y0!=null) sh.push({name:'mid-cut-barrier',x:0,y:y0,w:SHEET_W,h:KERF,kind:'cut-line'});
+          const y0=centerCut(prs,SHEET_L);
+          if(y0!=null){
+            const cut=applyMidCut(sh,y0,material);
+            sh.splice(0,sh.length,...cut);
+          }
         }
       }
       metrics=layoutMetrics(sheets);
       newOffcuts.push(...loggedOffcuts(sheets,material));
-    }
+    }else unplaced.push(...remaining);
   }
   const panels=sheets.map((sh,i)=>({placements:sh,w:SHEET_W,l:SHEET_L,label:`Sheet ${i+1}/${sheets.length}`}))
     .concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
-  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize};
+  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize,unplaced};
 }
 
 /* ---- boards ----
@@ -1467,10 +1509,10 @@ function packBoardSeg(remaining,bw,bl,material){
     const omap={}; shapes.forEach(k=>omap[k]=mode);
     const cols=columnsForBin(remaining,bw,bl,omap);
     if(!cols.length) continue;
-    const [pl,placedCols]=guillotineColumns(cols,bw,bl,material,null,null);
+    const [pl,placedCols,,free]=guillotineColumns(cols,bw,bl,material,null,null);
     const placed=placedCols.flatMap(([c])=>c.parts);
     if(!placed.length) continue;
-    const [plo]=addOffcuts(pl.slice(),bw,bl,material,null,true,boardTier);
+    const [plo]=offcutsFromFree(pl.slice(),free,material,boardTier);
     const scrap=plo.filter(o=>o.kind==='offcut'&&o.tier!=='inventory')
                    .reduce((a,o)=>a+o.w*o.h,0);
     const partArea=placed.reduce((a,x)=>a+x.L*x.S,0);
@@ -1514,7 +1556,7 @@ function packBoards(parts,stock){
   let uid=0; const flat=[];
   for(const p of parts)
     for(let i=0;i<p.qty;i++)
-      flat.push({id:uid++,L:Math.max(p.L,p.W),S:Math.min(p.L,p.W),name:p.name});
+      flat.push({id:uid++,L:p.grainL??p.L,S:p.grainW??p.W,name:p.name,noRotate:true});
   const panels=[]; let remaining=flat;
   let scrapArea=0, keepArea=0;
   /* Waste decides which board to reach for, not size. Every board still on the rack
@@ -1554,8 +1596,15 @@ function packBoards(parts,stock){
   }
   for(const b of touched) b.used=true;
   const m=mergeBoardPanels(panels);
+  /* Charge the wood actually consumed: parts, unusable remnants and every saw kerf.
+     Inventory remnants remain assets on the rack and are the only area excluded. */
+  const sourceArea=[...touched].reduce((a,b)=>a+b.w*b.l,0);
+  const inventoryArea=m.offcuts.reduce((a,o)=>a+o.l*o.w,0);
+  const placedArea=m.panels.reduce((a,p)=>a+p.placements
+    .filter(x=>x.kind==='part').reduce((s,x)=>s+x.w*x.h,0),0);
   return {panels:m.panels,boardsUsed:touched.size,unplaced:remaining,segMax:RIP_MAX,
-          scrapArea:r4(scrapArea+m.scrap),keepArea:r4(keepArea+m.keep)};
+          newOffcuts:m.offcuts,
+          scrapArea:r4(Math.max(0,sourceArea-inventoryArea-placedArea)),keepArea:r4(inventoryArea)};
 }
 
 /* One drawing per board, not per piece. A board longer than the crosscut limit is
@@ -1568,7 +1617,7 @@ function mergeBoardPanels(panels){
     if(!byBoard.has(p.board)) byBoard.set(p.board,[]);
     byBoard.get(p.board).push(p);
   }
-  const out=[]; let scrap=0, keep=0;
+  const out=[]; const offcuts=[]; let scrap=0, keep=0;
   for(const [b,list] of byBoard){
     list.sort((x,y)=>x.start-y.start);
     const placements=[]; const cuts=[];
@@ -1582,16 +1631,20 @@ function mergeBoardPanels(panels){
          board is simply uncut, so no line goes there. */
       if(n<list.length-1) cuts.push(end);
     });
-    /* Whatever is left past the last piece worked is still board, in one length. */
+    /* Detaching the worked section consumes one final crosscut kerf before the tail. */
     if(end<b.l-EPS){
-      const h=r4(b.l-end), tier=boardTier(b.w,h);
-      placements.push({kind:'offcut',x:0,y:end,w:b.w,h,tier});
+      const tailY=r4(Math.min(b.l,end+KERF));
+      const h=r4(b.l-tailY), tier=boardTier(b.w,h);
+      cuts.push(end);
+      if(h>EPS) placements.push({kind:'offcut',x:0,y:tailY,w:b.w,h,tier});
       if(tier==='inventory') keep+=b.w*h; else scrap+=b.w*h;
     }
+    for(const p of placements) if(p.kind==='offcut'&&p.tier==='inventory')
+      offcuts.push({material:b.material,l:r4(Math.max(p.w,p.h)),w:r4(Math.min(p.w,p.h))});
     out.push({placements,w:b.w,l:b.l,board:b,cuts,
               label:b.material+' — '+fmt(b.l)+'" \u00d7 '+fmt(b.w)+'" board'});
   }
-  return {panels:out,scrap:r4(scrap),keep:r4(keep)};
+  return {panels:out,offcuts,scrap:r4(scrap),keep:r4(keep)};
 }
 
 /* ================= fractions ================= */
@@ -1600,10 +1653,13 @@ function parseFrac(s){
   s=String(s).trim().replace(/["”]/g,'').replace(/\s+/g,' ');
   if(!s) return null;
   let m;
-  if((m=s.match(/^(-?\d+)\s+(\d+)\/(\d+)$/))) return (+m[1]<0?-1:1)*(Math.abs(+m[1])+(+m[2])/(+m[3]));
+  if((m=s.match(/^(-?\d+)\s+(\d+)\/(\d+)$/))){
+    const v=(+m[3])===0?NaN:(+m[1]<0?-1:1)*(Math.abs(+m[1])+(+m[2])/(+m[3]));
+    return Number.isFinite(v)?v:NaN;
+  }
   /* A zero denominator gave Infinity, which passes every null and NaN check
      downstream and then propagates through every deduction. */
-  if((m=s.match(/^(-?\d+)\/(\d+)$/))) return (+m[2])===0?NaN:(+m[1])/(+m[2]);
+  if((m=s.match(/^(-?\d+)\/(\d+)$/))){ const v=(+m[2])===0?NaN:(+m[1])/(+m[2]); return Number.isFinite(v)?v:NaN; }
   if((m=s.match(/^-?\d*\.?\d+$/))){ const v=parseFloat(s); return Number.isFinite(v)?v:NaN; }
   return NaN;
 }
@@ -1793,7 +1849,7 @@ function refreshDerived(){
   document.getElementById('d_ff_over').textContent=fmt(cfg.ff_overhang)+'"';
   /* Stick size is the stick material's, so the two fields mirror it rather than
      offering a second place to type a different answer. */
-  const st=matOf(POPLAR);
+  const st=matOf(stickMat());
   if(st){
     const sl=document.getElementById('stock_length'), sw=document.getElementById('stock_width');
     if(sl&&st.l>0) sl.value=fmt(st.l);
@@ -2331,10 +2387,10 @@ function syncElev(run){
     return;
   }
   E.stats.style.display='';
-  const ffOn=st.def.c==='Face frame';
+  const builds=[...new Set(Rn.cabs.map(c=>c.constr))];
   E.stats.innerHTML='<div>Cabinets<b>'+Rn.cabs.length+'</b></div>'+
     '<div>Wall to wall<b>'+fmt(Rn.total)+'"</b></div>'+
-    '<div>Build<b>'+(ffOn?'Face frame':'Frameless')+'</b></div>';
+    '<div>Build<b>'+(builds.length>1?'Mixed':builds[0])+'</b></div>';
   const warns=(Rn.fitWarns||[]).concat(Rn.warn?[Rn.warn]:[]);
   E.note.style.display=warns.length?'':'none';
   E.note.className='runnote warn';
@@ -2582,19 +2638,18 @@ function readCfg(){
       if(CFG_LISTS[k]){
         const parts=el.value.split(',').map(s=>s.trim()).filter(Boolean);
         const nums=parts.map(parseFrac);
-        if(nums.some(n=>n===null||isNaN(n)||n<=0))
+        if(nums.some(n=>n===null||!Number.isFinite(n)||n<=0))
           throw new Error('"'+el.parentElement.querySelector('label').textContent.trim()+'" under '+sec+
             ' should be lengths separated by commas, like 18, 20, 22.');
         cfg[k]=nums.sort((x,y)=>y-x);   // longest first
         continue;
       }
       const v=parseFrac(el.value);
-      if(v===null||isNaN(v))
+      if(v===null||!Number.isFinite(v))
         throw new Error('"'+el.previousElementSibling.textContent+'" under '+sec+' needs a number.');
       cfg[k]=v;
     }
   // resolve nominal stock to the actual thickness from the top section
-  MAT_SWAPS=[];
   for(const k of ['box_stock','back_stock','shelf_stock','drawer_side_stock',
                   'drawer_bottom_stock','toe_kick_stock','toe_kick_runner_stock','door_panel_stock'])
     cfg[k]=sheetName(cfg[k]);
@@ -2609,7 +2664,7 @@ function readCfg(){
   cfg.ply_thickness=matThick(cfg.box_stock);
   /* A stick is whatever size the stick material says it is, so Stock length and width
      follow the material rather than being typed twice. */
-  const st=matOf(POPLAR);
+  const st=matOf(stickMat());
   if(st&&st.l>0) cfg.stock_length=st.l;
   if(st&&st.w>0) cfg.stock_width=st.w;
   cfg.width_deduction=2*cfg.ply_thickness-2*cfg.carcass_dado_depth;
@@ -2633,6 +2688,10 @@ function readCfg(){
                       ['front_width','front_stock']])
     if(cfg[w]>cfg.stock_width+1e-9) cfg[k]='Boards';
   cfg.ff_overhang=cfg.face_frame_width/2;   // stile centred on the end cabinet's outer face
+  if(!(cfg.width_round>0)) throw new Error('Width rounding needs to be greater than zero.');
+  if(cfg.kerf<0) throw new Error('Saw kerf cannot be negative.');
+  if(cfg.carcass_dado_depth<0||cfg.drawer_dado_depth<0||cfg.door_dado_depth<0)
+    throw new Error('Dado depths cannot be negative.');
   if(cfg.lower_rail_width>cfg.face_frame_width+1e-9)
     throw new Error('Lower rail width is '+fmt(cfg.lower_rail_width)+
       '" but the face frame is '+fmt(cfg.face_frame_width)+'" — the rail cannot be wider than the stiles.');
@@ -2723,7 +2782,8 @@ function packSticks(items,stockLen,kerf,stockW){
   const pieces=[];
   for(const it of items)
     for(let i=0;i<it.qty;i++)
-      pieces.push({name:it.name,cab:it.cab,len:it.L,width:it.W,rip:r4(stockW-it.W)});
+      pieces.push({name:it.name,cab:it.cab,len:it.grainL??it.L,width:it.grainW??it.W,
+                   rip:r4(stockW-(it.grainW??it.W))});
   pieces.sort((a,b)=>b.len-a.len);
   const sticks=[]; const unplaced=[];
   for(const p of pieces){
@@ -2755,8 +2815,8 @@ function shakerParts(tag,label,w,h,qty,cfg){
   const dd=cfg.door_dado_depth, cl=cfg.door_panel_clearance;
   const p=[];
   const push=(name,mat,x,y,q)=>{const [L,W]=LW(x,y);
-    const part={cab:tag,name,mat,L,W,qty:q,grp:'door'};
-    if(mat===stickMat()&&(src==='Boards'||W>cfg.stock_width+1e-9)){
+    const part={cab:tag,name,mat,L,W,qty:q,grp:'door',grainL:r4(x),grainW:r4(y)};
+    if(mat===stickMat()&&(src==='Boards'||y>cfg.stock_width+1e-9)){
       part.wide=true;
       part.lumber=front?cfg.front_lumber:cfg.door_lumber;
     }
@@ -2794,19 +2854,22 @@ function frontSpan(run,W,H,constr,mount,cfg){
    fronts always add back up to the opening. */
 function splitHeights(spanH,n,typed,cfg){
   const rev=cfg.door_reveal;
-  if(typed.some(v=>v!==null&&isNaN(v))) return {err:'unreadable'};
-  const fixed=typed.filter(v=>v!==null&&!isNaN(v));
+  if(typed.some(v=>v!==null&&!Number.isFinite(v))) return {err:'unreadable'};
+  const fixed=typed.filter(v=>v!==null&&Number.isFinite(v));
   const blanks=n-fixed.length;
   const rest=spanH-(n-1)*rev-fixed.reduce((a,b)=>a+b,0);
-  if(blanks>0&&rest<=0) return {err:'overfull',rest};
+  if(rest<-EPS||(blanks>0&&rest<=0)) return {err:'overfull',rest};
+  const minH=2*(cfg.front_rail_width??cfg.door_rail_width);
+  const badFixed=fixed.find(v=>v<=minH+EPS);
+  if(badFixed!=null) return {err:'tooshort',auto:badFixed};
   const auto=blanks>0?Math.floor(rest/blanks*16)/16:0;
-  if(blanks>0&&auto<=2*(cfg.front_rail_width??cfg.door_rail_width)) return {err:'tooshort',auto};
+  if(blanks>0&&auto<=minH+EPS) return {err:'tooshort',auto};
   const lastBlank=typed.map((v,i)=>(v===null||isNaN(v))?i:-1).filter(i=>i>=0).pop();
   const leftover=r4(rest-auto*blanks);
   const heights=[];
   for(let i=0;i<n;i++){
     const v=typed[i];
-    if(v!==null&&!isNaN(v)) heights.push(snap16(v));
+    if(v!==null&&Number.isFinite(v)) heights.push(snap16(v));
     else heights.push(i===lastBlank?r4(auto+leftover):auto);
   }
   return {heights,auto};
@@ -2824,9 +2887,9 @@ function frontParts(c,cfg){
     const n=c.shelves;
     const typed=[]; for(let i=0;i<n;i++) typed.push(parseFrac((c.dh||[])[i]));
     const s=splitHeights(spanH,n,typed,cfg);
-    if(s.err==='unreadable') return {parts:[],note:"A drawer front height on "+c.id+" isn't a number I can read."};
-    if(s.err==='overfull')   return {parts:[],note:'The heights set on '+c.id+' fill more than the '+fmt(spanH)+'" opening.'};
-    if(s.err==='tooshort')   return {parts:[],note:c.id+' has only '+fmt(s.auto)+'" left per drawer front, too short for a shaker frame.'};
+    if(s.err==='unreadable') return {parts:[],note:"A drawer front height on "+c.id+" isn't a number I can read.",error:true};
+    if(s.err==='overfull')   return {parts:[],note:'The heights set on '+c.id+' fill more than the '+fmt(spanH)+'" opening.',error:true};
+    if(s.err==='tooshort')   return {parts:[],note:c.id+' has a '+fmt(s.auto)+'" drawer front, too short for a shaker frame.',error:true};
     const heights=s.heights;
     const used=heights.reduce((a,b)=>a+b,0)+(n-1)*rev;
     const parts=[]; const seen={};
@@ -2837,6 +2900,8 @@ function frontParts(c,cfg){
       kind:'fronts',n,w:snap16(spanW),heights};
   }
   if(c.run==='lower'&&c.interior==='Neither') return {parts:[],note:null};
+  if(spanH<=2*cfg.door_rail_width+EPS)
+    return {parts:[],note:c.id+' door is too short for its shaker rails.',error:true};
 
   /* A wide box can be split into two openings. On a face frame that means a centre
      stile, so the two openings share the frame width between them. */
@@ -2848,7 +2913,7 @@ function frontParts(c,cfg){
     ? (ff ? snap16((openW-cfg.face_frame_width)/2+(inset?-2*rev:2*ov))
           : snap16((spanW-rev)/2))
     : snap16(spanW);
-  if(wEach<=2*cfg.door_stile_width) return {parts:[],note:c.id+' doors came out too narrow for a shaker frame.'};
+  if(wEach<=2*cfg.door_stile_width) return {parts:[],note:c.id+' doors came out too narrow for a shaker frame.',error:true};
   return {parts:shakerParts(c.id,'Door',wEach,snap16(spanH),n,cfg),
           note:null,kind:'doors',n,w:wEach,h:snap16(spanH),split};
 }
@@ -2984,8 +3049,8 @@ function faceFrameSeg(run,R,seg,cfg,tag,fit){
   const frameH=carcH+topOH+botOH;
   const p=[];
   const push=(name,a,b,qty)=>{const [L,W]=LW(a,b);
-    const part={cab:tag,name,mat:stickMat(),L,W,qty,grp:'ff'};
-    if(cfg.ff_stock==='Boards'||W>cfg.stock_width+1e-9){
+    const part={cab:tag,name,mat:stickMat(),L,W,qty,grp:'ff',grainL:r4(a),grainW:r4(b)};
+    if(cfg.ff_stock==='Boards'||b>cfg.stock_width+1e-9){
       part.wide=true; part.lumber=cfg.ff_lumber;
     }
     p.push(part);};
@@ -3030,13 +3095,26 @@ function faceFrameSeg(run,R,seg,cfg,tag,fit){
           railLen:r4(railLen),midLen:r4(frameH-2*railW),
           mixed:seg.cabs.some(c=>c.h!==seg.cabs[0].h)};
 }
+function faceFrameSegments(R){
+  /* A cabinet override is the construction actually being built. Keep adjacent
+     face-frame cabinets together, and end a frame at a divide or frameless cabinet. */
+  const segs=[]; let cur=null;
+  R.cabs.forEach((c,i)=>{
+    if(c.constr!=='Face frame'){ if(cur){ segs.push(cur); cur=null; } return; }
+    const brk=!cur||i===0||R.cabs[i-1].constr!=='Face frame'||(R.divs&&R.divs[i-1]);
+    if(brk){ if(cur) segs.push(cur); cur={cabs:[c],gaps:[],start:i,end:i}; }
+    else{ cur.gaps.push(R.gaps[i-1]||0); cur.cabs.push(c); cur.end=i; }
+  });
+  if(cur) segs.push(cur);
+  return segs;
+}
 /* One frame per segment of the run. */
 function faceFrameParts(run,R,cfg){
-  const segs=runSegments(R);
+  const segs=faceFrameSegments(R);
   const base=run==='upper'?'FF-U':'FF-L';
   return segs.map((seg,i)=>faceFrameSeg(run,R,seg,cfg,segs.length>1?base+(i+1):base,{
-      fitL:i===0&&!!R.fitL, sL:R.scribeL,
-      fitR:i===segs.length-1&&!!R.fitR, sR:R.scribeR
+      fitL:seg.start===0&&!!R.fitL, sL:R.scribeL,
+      fitR:seg.end===R.cabs.length-1&&!!R.fitR, sR:R.scribeR
     })).filter(Boolean);
 }
 
@@ -3165,7 +3243,8 @@ function build(){
   const errs=[], runs={}, warns=[];
   /* A material this job names is no longer on the list. It has been substituted so the
      job still builds, but the parts are a different thickness than they were. */
-  for(const sw of MAT_SWAPS)
+  const swaps=MAT_SWAPS.splice(0);
+  for(const sw of swaps)
     warns.push('"'+sw.from+'" is no longer in your materials, so those parts were cut '+
       'from "'+sw.to+'" instead \u2014 at '+fmt(matThick(sw.to))+'" rather than what they were. '+
       'Check the sizes, or put the material back.');
@@ -3179,6 +3258,19 @@ function build(){
   const RC={upper:runCfg('upper',cfg),lower:runCfg('lower',cfg)};
   const cabs=[...(runs.upper?.cabs||[]),...(runs.lower?.cabs||[])];
   if(!cabs.length) return toast('Nothing to build — tick a run and add some cabinets.');
+  /* Freeze the included work with this result so estimates and shopping do not charge
+     for components that were deliberately left out of the build. */
+  const scope={box:0,drawerbox:0,shelf:0,finishBoxArea:0,drawerCabIds:[]};
+  for(const c of cabs){
+    if(include[c.run].carcass){
+      scope.box++;
+      scope.finishBoxArea+=c.h*c.d*2+c.w*c.d;
+      if(!(c.run==='lower'&&c.interior==='Drawers')) scope.shelf+=c.shelves;
+    }
+    if(c.run==='lower'&&c.interior==='Drawers'&&include[c.run].boxes){
+      scope.drawerbox+=c.shelves; scope.drawerCabIds.push(c.id);
+    }
+  }
 
   for(const c of cabs){
     if(c.run!=='lower'||c.interior!=='Drawers'||c.shelves<1) continue;
@@ -3207,6 +3299,7 @@ function build(){
   for(const c of cabs){
     if(!include[c.run].on||!include[c.run].doors) continue;
     const f=frontParts(c,RC[c.run]);
+    if(f.error) return toast(f.note);
     if(f.note) warns.push(f.note);
     if(!f.parts.length) continue;
     for(const p of f.parts){
@@ -3240,12 +3333,11 @@ function build(){
 
   const parts=order.map(k=>agg.get(k));
 
-  /* Face frame is solid stock, so it never goes on a sheet. One frame per run,
-     built when that run's default construction is Face frame. */
+  /* Face frame is solid stock, so it never goes on a sheet. */
   const ffParts=[]; const ffInfo=[];
   for(const r of RUNS){
     const R=runs[r];
-    if(!R?.cabs.length||state[r].def.c!=='Face frame') continue;
+    if(!R?.cabs.some(c=>c.constr==='Face frame')) continue;
     if(!include[r].on||!include[r].ff) continue;
     const frames=faceFrameParts(r,R,RC[r]);
     if(!frames||!frames.length) continue;
@@ -3259,15 +3351,15 @@ function build(){
       ffParts.push(...f.parts.map(p=>({...p,run:r})));
       ffInfo.push({run:r,...f});
     }
-    const odd=R.cabs.filter(c=>c.constr!=='Face frame');
-    if(odd.length) warns.push('The '+r+' frames cover the whole run, but '+odd.map(c=>c.id).join(', ')+
-      (odd.length===1?' is':' are')+' set to frameless.');
   }
 
   /* Group by what gets bought and cut at the same time. Carcasses and toe kick always
      ride together. Drawer boxes share plywood with the carcasses, and door frames share
      poplar with the face frame, so each of those pairs gets a toggle. */
   parts.push(...ffParts);           // face frame joins the part list before grouping
+  const invalidPart=parts.find(p=>!Number.isFinite(p.L)||!Number.isFinite(p.W)||p.L<=0||p.W<=0||!(p.qty>0));
+  if(invalidPart) return toast((invalidPart.cab?invalidPart.cab+' ':'')+invalidPart.name+
+    ' has an invalid cut size. Check the cabinet dimensions and shop deductions.');
   const drawersApart=document.getElementById('drawer_phase').value==='later';
   const doorsApart=document.getElementById('door_phase').value==='later';
   const isBox=p=>p.name.indexOf('Drawer ')===0;
@@ -3295,8 +3387,10 @@ function build(){
     const offKey=k=>(k==='door'?'ff':k);
     const offSet=(pre,k)=>{ const el=document.getElementById(pre+offKey(k)); return el?el.value==='yes':false; };
     const stock=loadOffcuts();
-    let banked=[];
+    const unplaced=[]; let banked=[];
     for(const g of groups){
+      g.useOff=offSet('off_use_',g.key);
+      g.logOff=offSet('off_log_',g.key);
       /* Asked of the material, not of a name list built at load. A renamed material
          would fall out of that list and its parts would be nested on plywood. */
       g.sheetParts=g.parts.filter(p=>matKind(p.mat)!=='stick');
@@ -3307,10 +3401,12 @@ function build(){
       const stickable=g.linearParts.filter(p=>!p.wide);
       if(stickable.length){
         g.sticks=packSticks(stickable,cfg.stock_length,cfg.kerf,cfg.stock_width);
-        for(const u of (g.sticks.unplaced||[]))
+        for(const u of (g.sticks.unplaced||[])){
+          unplaced.push(u);
           warns.push(g.label+': '+u.name+' at '+fmt(u.len)+'" \u00d7 '+fmt(u.width)+
             '" does not fit a '+fmt(cfg.stock_length)+'" \u00d7 '+fmt(cfg.stock_width)+
             '" stick, so it is not on any cut map. Cut it from a board or change the stock.');
+        }
       }
       /* Board parts always look at the boards on hand — the pull-from-rack setting
          governs sheet and stick offcuts, not solid stock you already own. */
@@ -3329,8 +3425,8 @@ function build(){
         const packs=[...byLum.entries()].map(([mat,list])=>
           /* Solid stock is solid stock — a stick offcut on the rack mills the same as
              a lumber offcut. Only sheets are excluded. */
-          packBoards(list,stock.filter(o=>matKind(o.material)!=='sheet'&&
-                                          (!mat||o.material===mat))));
+          packBoards(list,stock.concat(banked).filter(o=>matKind(o.material)!=='sheet'&&
+                                                        (!mat||o.material===mat))));
         /* Kept per species so the estimate can charge each its own rate. */
         const scrapByMat={};
         [...byLum.keys()].forEach((mat,i)=>{
@@ -3340,10 +3436,12 @@ function build(){
         g.boards={scrapByMat,panels:[].concat(...packs.map(x=>x.panels)),
                   boardsUsed:packs.reduce((a,x)=>a+x.boardsUsed,0),
                   unplaced:[].concat(...packs.map(x=>x.unplaced)),
+                  banked:[].concat(...packs.map(x=>x.newOffcuts||[])),
                   segMax:RIP_MAX,
                   scrapArea:r4(packs.reduce((a,x)=>a+x.scrapArea,0)),
                   keepArea:r4(packs.reduce((a,x)=>a+x.keepArea,0))};
         if(g.boards.unplaced.length){
+          unplaced.push(...g.boards.unplaced);
           for(const [mat] of byLum){
             if(mat&&!stock.some(o=>o.material===mat))
               warns.push(g.label+' is set to be milled from '+mat+
@@ -3356,26 +3454,42 @@ function build(){
             '). Add boards in the offcut library, or cut these by hand from the list.');
         }
       }
-      if(!g.sheetParts.length) continue;
-      if(!include.out.cutmap&&!include.out.estimate) continue;   // nothing needs the nest
-      try{
-        g.useOff=offSet('off_use_',g.key);
-        g.logOff=offSet('off_log_',g.key);
-        g.nest=runNesting(g.sheetParts,cfg,(g.useOff?stock:[]).concat(g.logOff?banked:[]));
+      if(g.sheetParts.length&&(include.out.cutmap||include.out.estimate)) try{
+        g.nest=runNesting(g.sheetParts,cfg,g.useOff?stock.concat(banked):[]);
         /* runNesting has always collected parts too big for any sheet; nothing read the
            list, so a 100" part simply vanished from the cut map with no sheet raised. */
-        for(const m of g.nest.materials)
-          for(const o of (m.oversize||[]))
-            warns.push(g.label+': '+(o.name||'a part')+' at '+fmt(o.L)+'" \u00d7 '+fmt(o.S)+
-              '" is bigger than a sheet of '+m.material+', so it is not on any cut map.');
-        if(!g.logOff) g.nest.banked=[];
-        banked=banked.concat(g.nest.banked);
-      }catch(e){ console.error(e); toast('Nesting hit a snag — cut list is still good.'); }
+        for(const m of g.nest.materials) for(const o of (m.unplaced||[])){
+          unplaced.push(o);
+          warns.push(g.label+': '+(o.name||'a part')+' at '+fmt(o.L)+'" \u00d7 '+fmt(o.S)+
+            '" could not be placed on '+m.material+', so it is not on any cut map.');
+        }
+      }catch(e){
+        console.error(e); unplaced.push(...g.sheetParts);
+        warns.push(g.label+': nesting failed, so this result and its estimate are incomplete.');
+      }
+      /* Remove any newly made remnant consumed by a later operation, then add only
+         the terminal board and sheet remnants this phase is set to log. */
+      banked=banked.filter(o=>!o.used);
+      if(g.logOff){
+        if(g.boards) banked.push(...g.boards.banked);
+        if(g.nest) banked.push(...g.nest.banked);
+      }else{
+        if(g.boards) g.boards.banked=[];
+        if(g.nest) g.nest.banked=[];
+      }
     }
+    const terminal=new Set(banked);
+    for(const g of groups){
+      if(g.boards) g.boards.banked=g.boards.banked.filter(o=>terminal.has(o));
+      if(g.nest) g.nest.banked=g.nest.banked.filter(o=>terminal.has(o));
+    }
+    if(unplaced.length) warns.unshift('This result is incomplete: '+unplaced.length+
+      ' required piece'+(unplaced.length===1?' is':'s are')+' missing from the cut maps. Do not use it as a final estimate.');
     const unusedStock=stock.filter(o=>!o.used);
     const useOff=groups.some(g=>g.useOff), logOff=groups.some(g=>g.logOff);
-    RESULT={cfg,runCfg:RC,runs,cabs,parts,groups,drawersApart,doorsApart,warns,useOff,logOff,ffInfo,tkInfo,frontInfo,
-            rack:{stock,unusedStock,banked}};
+    RESULT={cfg,runCfg:RC,runs,cabs,parts,groups,scope,complete:unplaced.length===0,
+            drawersApart,doorsApart,warns,useOff,logOff,ffInfo,tkInfo,frontInfo,
+            rack:{stock,sourceSig:rackSig(stock),unusedStock,banked}};
     document.getElementById('builder').style.display='none';
     document.getElementById('assumpCard').style.display='none';
     document.getElementById('results').classList.add('on');
@@ -3530,7 +3644,7 @@ function viewCut(tb,sum,g){
     }
   }
   if(g.linearParts.length){
-    h+='<tr class="grp"><td colspan="6">'+POPLAR+'</td></tr>';
+    h+='<tr class="grp"><td colspan="6">'+stickMat()+'</td></tr>';
     for(const p of g.linearParts)
       h+='<tr><td>'+p.cab+'</td><td>'+p.name+'</td><td>'+p.mat+'</td><td class="n">'+fmt(p.L)+'"</td><td class="n">'+fmt(p.W)+'"</td><td class="n">'+p.qty+'</td></tr>';
     const byW={};
@@ -3602,7 +3716,8 @@ function viewMap(body,sum,g){
       '<span><i style="background:#f7d6d6;border-color:#d99999"></i>trash</span>'+
       '<span><i style="background:#fff;border-color:#d33"></i>red dash = breakdown cut</span></div>';
     for(const m of N.materials){
-      h+='<h3 style="font-size:13px;margin:14px 0 8px">'+m.material+' — '+m.sheets+' sheet(s) 48"×96"'+
+      const sm=matOf(m.material), size=sm?fmt(sm.w)+'"×'+fmt(sm.l)+'"':'';
+      h+='<h3 style="font-size:13px;margin:14px 0 8px">'+m.material+' — '+m.sheets+' sheet(s) '+size+
         (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</h3>';
       for(const p of m.panels)
         h+='<div class="sheetwrap sheetpanel"><h3>'+p.label+'</h3>'+sheetSVG(p)+'</div>';
@@ -3630,7 +3745,7 @@ function viewMap(body,sum,g){
     if(B.panels.length) h+='</div>';
   }
   if(g.sticks&&g.sticks.length){
-    h+='<h3 style="font-size:13px;margin:18px 0 6px">'+POPLAR+' — '+g.sticks.length+
+    h+='<h3 style="font-size:13px;margin:18px 0 6px">'+stickMat()+' — '+g.sticks.length+
       ' stick(s) at '+fmt(cfg.stock_length)+'"</h3>'+
       '<div class="legend"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>rip waste, cut off the side</span>'+
       '<span><i style="background:#ececec;border-color:#b0b0b0"></i>drop</span></div>';
@@ -3654,9 +3769,10 @@ function viewOffcuts(tb,sum,body){
   if(!RESULT.logOff)
     h+='<tr class="grp"><td colspan="4">Not logging new offcuts on this job</td></tr>';
   for(const g of RESULT.groups){
-    if(!g.nest?.banked.length) continue;
+    const made=[...(g.nest?.banked||[]),...(g.boards?.banked||[])];
+    if(!made.length) continue;
     h+='<tr class="grp"><td colspan="4">New off the '+g.label.toLowerCase()+' cutting</td></tr>';
-    for(const o of g.nest.banked)
+    for(const o of made)
       h+='<tr><td>'+o.material+'</td><td class="n">'+fmt(o.l)+'"</td><td class="n">'+fmt(o.w)+'"</td><td>this job</td></tr>';
   }
   if(R.unusedStock.length)
@@ -3882,7 +3998,7 @@ function renderPriceRows(){
       /* Not seeded into est.prices. Writing a 0 here would look like "this material is
          free" and a lumber type would stop being charged the moment its line was drawn.
          The field shows what it would actually cost; typing is what commits a price. */
-      const eff=est.prices[n]??MAT_DEFAULT_PRICE[n]??
+      const eff=est.prices[n]??defaultMatPrice(n)??
                 (kind==='lumber'?(est.millbf||0):0);
       const row=document.createElement('div'); row.className='pricerow';
       const nm=document.createElement('div'); nm.className='nm';
@@ -3917,13 +4033,17 @@ function saveEst(){ readEst(); clearTimeout(window._se); window._se=setTimeout(s
 
 /* Count everything the tasks can be charged against. */
 function estCounts(R){
-  const c={flat:1,box:R.cabs.length,door:0,front:0,drawerbox:0,shelf:0,
-           sheet:0,stick:0,frame:R.ffInfo.length,tk:R.tkInfo?R.tkInfo.secs.length:0,sqft:0,
+  const S=R.scope||{};
+  const c={flat:1,box:S.box??R.cabs.length,door:0,front:0,
+           drawerbox:S.drawerbox??0,shelf:S.shelf??0,
+           sheet:0,stick:0,frame:R.ffInfo.length,
+           ffbox:R.ffInfo.reduce((a,f)=>a+(f.ids?.length||0),0),
+           tk:R.tkInfo?R.tkInfo.secs.length:0,sqft:0,
            millpart:0,millnet:0,millscrap:0,millbf:0,mill:new Map()};
   for(const f of R.frontInfo){
     if(f.kind==='doors') c.door+=f.n; else c.front+=f.n;
   }
-  for(const cab of R.cabs){
+  if(!R.scope) for(const cab of R.cabs){
     if(cab.run==='lower'&&cab.interior==='Drawers') c.drawerbox+=cab.shelves;
     else c.shelf+=cab.shelves;
   }
@@ -3971,7 +4091,8 @@ function estCounts(R){
   let fa=0;
   for(const p of R.parts)
     if(p.grp==='door'||p.name==='Door Panel'||p.name==='Front Panel') fa+=p.L*p.W*p.qty*2;
-  for(const cab of R.cabs) fa+=(cab.h*cab.d*2+cab.w*cab.d);
+  if(R.scope) fa+=R.scope.finishBoxArea||0;
+  else for(const cab of R.cabs) fa+=(cab.h*cab.d*2+cab.w*cab.d);
   c.sqft=fa/144;
   return c;
 }
@@ -3982,7 +4103,9 @@ function buildEstimate(R){
   const rows=[];
   let mins=0;
   for(const t of est.tasks){
-    const qty=c[t.basis]||0;
+    /* "Attach face frames per box" applies only to boxes that actually received a
+       frame. Other box-based work still follows the included carcass scope. */
+    const qty=(t.id==='hangff'&&t.basis==='box')?c.ffbox:(c[t.basis]||0);
     /* No doors means no door setup. Charging setup against a zero count was
        padding the job with time for work that never happens. */
     if(t.basis!=='flat'&&qty<=0) continue;
@@ -4019,12 +4142,12 @@ function buildEstimate(R){
   const used={};
   for(const g of R.groups){
     if(g.nest) for(const m of g.nest.materials) used[m.material]=(used[m.material]||0)+m.sheets;
-    if(g.sticks) used[POPLAR]=(used[POPLAR]||0)+g.sticks.length;
+    if(g.sticks){ const sm=stickMat(); used[sm]=(used[sm]||0)+g.sticks.length; }
   }
   for(const m in used){
-    const price=est.prices[m]??DEFAULT_PRICES[m]??0;
+    const price=matPrice(m);
     const cost=used[m]*price;
-    matRows.push({name:m,qty:used[m],unit:m===POPLAR?'stick':'sheet',price,cost});
+    matRows.push({name:m,qty:used[m],unit:matKind(m)==='stick'?'stick':'sheet',price,cost});
     matCost+=cost;
   }
   /* Boards taken off the rack were being carried at nothing, so a milled run showed
@@ -4036,7 +4159,7 @@ function buildEstimate(R){
        rack carries a per-stick or per-sheet price, which would be nonsense charged by
        the board foot, so those fall back to the single rough rate. An explicit zero on
        a lumber type means "do not charge for this". */
-    const own=matKind(n)==='lumber'?(est.prices[n]??MAT_DEFAULT_PRICE[n]):null;
+    const own=matKind(n)==='lumber'?(est.prices[n]??defaultMatPrice(n)):null;
     const rate=own!=null?own:(est.millbf||0);
     if(!(rate>0)) continue;
     const bf=Math.round(v.bf*100)/100;          // charge what the row shows, to the cent
@@ -4077,10 +4200,12 @@ function buildEstimate(R){
 function viewEstimate(body,sum){
   const R=RESULT, e=buildEstimate(R);
   const $=n=>'$'+n.toLocaleString('en-US',{maximumFractionDigits:0});
-  sum.innerHTML='<div>Hours<b>'+e.hours.toFixed(1)+'</b></div>'+
+  sum.innerHTML=(R.complete?'':'<div>Status<b>Incomplete</b></div>')+
+    '<div>Hours<b>'+e.hours.toFixed(1)+'</b></div>'+
     '<div>Total<b>'+$(e.total)+'</b></div>'+
     '<div>Per box<b>'+$(e.total/Math.max(1,e.c.box))+'</b></div>';
-  let h='<div class="estsec"><h3>Time</h3><div class="tblwrap"><table>'+
+  let h=(R.complete?'':'<div class="warn">Required pieces are missing from the cut maps. This price is preliminary.</div>')+
+    '<div class="estsec"><h3>Time</h3><div class="tblwrap"><table>'+
     '<thead><tr><th>Task</th><th class="n">Setup</th><th class="n">Each</th><th class="n">Qty</th><th class="n">Hours</th></tr></thead><tbody>';
   for(const r of e.rows)
     h+='<tr><td>'+r.name+(r.detail?'<br><span style="font-size:10px;color:#7c8894">'+r.detail+'</span>':'')+
@@ -4168,7 +4293,7 @@ function dimV(y1,y2,x,label){
    the prep-screen preview is the only caller that turns it on. */
 function drawRunAssembly(run,Rn,cfg,opts){
   const cabs=Rn.cabs, n=cabs.length;
-  const ff=state[run].def.c==='Face frame';
+  const segs=faceFrameSegments(Rn), ff=segs.length>0;
   const span=cabs.reduce((a,c)=>a+c.w,0)+Rn.gaps.reduce((a,b)=>a+b,0);
   const sL=Rn.scribeL??Rn.scribe, sR=Rn.scribeR??Rn.scribe;
   const totalW=span+sL+sR;
@@ -4178,7 +4303,6 @@ function drawRunAssembly(run,Rn,cfg,opts){
   const s=(DW-M-14)/totalW;
   const H=maxH*s;
   let g='', x=M+sL*s;
-  const segs=runSegments(Rn);
   cabs.forEach((c,i)=>{
     const w=c.w*s, ch=hOf(c)*s;
     const y=TOPM+(c.align==='Bottom'?(H-ch):0);      // hang from the top or sit on the bottom
@@ -4196,11 +4320,12 @@ function drawRunAssembly(run,Rn,cfg,opts){
   });
   if(ff){
     const fw=cfg.face_frame_width*s, railW=(run==='upper'?cfg.upper_rail_width:cfg.lower_rail_width)*s;
-    let sx=M+(sL-(Rn.fitL?sL:cfg.ff_overhang))*s;
-    segs.forEach((seg,si)=>{
-      const first=si===0, last=si===segs.length-1;
-      const lOH=(first&&Rn.fitL)?sL:cfg.ff_overhang;
-      const rOH=(last&&Rn.fitR)?sR:cfg.ff_overhang;
+    const starts=[]; let runX=0;
+    cabs.forEach((c,i)=>{ starts.push(runX); runX+=c.w+(i<n-1?(Rn.gaps[i]||0):0); });
+    segs.forEach(seg=>{
+      const lOH=(seg.start===0&&Rn.fitL)?sL:cfg.ff_overhang;
+      const rOH=(seg.end===n-1&&Rn.fitR)?sR:cfg.ff_overhang;
+      const sx=M+(sL+starts[seg.start]-lOH)*s;
       const lSt=(cfg.ff_overhang+lOH)*s, rSt=(cfg.ff_overhang+rOH)*s;
       const sSpan=seg.cabs.reduce((a,c)=>a+c.w,0)+seg.gaps.reduce((a,b)=>a+b,0);
       const segH=Math.max(...seg.cabs.map(hOf))*s;
@@ -4215,9 +4340,6 @@ function drawRunAssembly(run,Rn,cfg,opts){
         px+=c.w*s;
         if(i<seg.cabs.length-1){ px+=(seg.gaps[i]||0)*s; g+=R(px-fw/2,TOPM,fw,segH,'rgba(29,95,138,.10)',DACC,THIN); }
       });
-      sx+=fW;
-      const idx=cabs.indexOf(seg.cabs[seg.cabs.length-1]);
-      if(idx>=0&&idx<n-1&&Rn.divs&&Rn.divs[idx]) sx+=(Rn.gaps[idx]||0)*s-rOH*s-cfg.ff_overhang*s;
     });
   }
   g+=R(M,TOPM,sL*s,H,'rgba(0,0,0,.05)','#b9c2ca',THIN);
@@ -4743,12 +4865,14 @@ async function renameProject(){
   const n=await uiPrompt('Project name','This is what the job is saved and printed under.',cur,'Kitchen for…');
   if(n===null) return;
   const name=n.trim(); if(!name) return;
+  const collision=Object.keys(projList()).some(k=>k!==cur&&k.toLowerCase()===name.toLowerCase());
+  if(collision) return toast('There is already a project called "'+name+'". Pick another name.');
   if(name!==cur&&projList()[cur]){
     const r=applyRename(cur,name);
     if(r==='exists') return toast('There is already a project called "'+name+'". Pick another name.');
     if(!r) return toast('Could not rename the project.');
   }else setCurrentProject(name);
-  save();
+  if(!save()) return;
   if(projList()[name]) projSave(name);
   toast('Renamed to "'+name+'".',true);
   if(document.getElementById('home').classList.contains('on')) renderHome();
@@ -4998,8 +5122,9 @@ function viewShopping(body,sum){
             cost:buy*(r.price||0)};
   });
   const slides={};
+  const drawerCabIds=new Set(RESULT.scope?.drawerCabIds||RESULT.cabs.map(c=>c.id));
   for(const c of RESULT.cabs){
-    if(c.run!=='lower'||c.interior!=='Drawers'||!c.shelves) continue;
+    if(c.run!=='lower'||c.interior!=='Drawers'||!c.shelves||!drawerCabIds.has(c.id)) continue;
     const gain=(c.constr==='Face frame'&&c.mount==='Overlay')?cfg.face_frame_thickness:0;
     const avail=c.d-(c.back?cfg.drawer_depth_back:cfg.drawer_depth_noback)+gain;
     const len=pickSlide(avail,cfg.slide_lengths).len;
@@ -5008,7 +5133,7 @@ function viewShopping(body,sum){
   const slideRows=Object.keys(slides).sort((a,b)=>b-a)
     .map(k=>({name:fmt(+k)+'" drawer slides',qty:slides[k]+' pairs',cost:0}));
 
-  let h='';
+  let h=RESULT.complete?'':'<div class="warn">Required pieces are missing. This shopping list is incomplete.</div>';
   h+=sect('Sheet goods',sheets);
   h+=sect('Solid stock',sticks);
   h+=sect('Rough lumber',lumber);
@@ -5031,7 +5156,7 @@ function projList(){
 }
 function projSave(name){
   const all=projList();
-  save();
+  if(!save()) return;
   all[name]={saved:new Date().toISOString(),job:localStorage.getItem('bbcab')};
   try{ localStorage.setItem(PKEY,JSON.stringify(all)); }catch(e){ return toast('Storage is full — export a backup and clear some projects.'); }
   localStorage.setItem('bbcab_current',name);
@@ -5390,8 +5515,11 @@ function homeInit(){
   document.getElementById('hNew').onclick=async()=>{
     const n=await uiPrompt('New project','It starts from your shop defaults.','','Kitchen for…');
     if(n===null) return;
+    const name=(n||'').trim()||'Untitled';
+    if(Object.keys(projList()).some(k=>k.toLowerCase()===name.toLowerCase()))
+      return toast('There is already a project called "'+name+'". Pick another name.');
     localStorage.removeItem('bbcab');
-    localStorage.setItem('bbcab_current',(n||'').trim()||'Untitled');
+    localStorage.setItem('bbcab_current',name);
     hardReload();
   };
   document.getElementById('hContinue').onclick=()=>showHome(false);
@@ -5420,7 +5548,7 @@ function homeInit(){
     const today=new Date().toISOString().slice(0,10);
     const rack=loadOffcuts();
     for(let i=0;i<res.qty;i++) rack.push({material:res.material,l:res.l,w:res.w,date:today});
-    saveOffcuts(rack); renderOffcutLib();
+    if(!saveOffcuts(rack)) return; renderOffcutLib();
     toast(res.qty+' piece'+(res.qty>1?'s':'')+' added to the rack.',true);
   };
   document.getElementById('ocAddMat').onclick=async()=>{
@@ -5443,19 +5571,25 @@ function loadOffcuts(){
     return a.map(o=>({material:o.material,l:+o.l,w:+o.w,date:o.date||'',used:false}));
   }catch(e){ return []; }
 }
+function rackSig(list){
+  return JSON.stringify(list.map(o=>[o.material,r4(o.l),r4(o.w),o.date||'']));
+}
 function saveOffcuts(list){
   try{ localStorage.setItem('bbcab_offcuts',JSON.stringify(
-    list.map(o=>({material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||new Date().toISOString().slice(0,10)})))); }
-  catch(e){}
+    list.map(o=>({material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||new Date().toISOString().slice(0,10)})))); return true; }
+  catch(e){ toast('Storage is full — export a backup first.'); return false; }
 }
 function bankOffcuts(){
   if(!RESULT?.rack) return toast('Build the cut list first.');
+  if(!RESULT.complete) return toast('This cut list is incomplete, so its offcuts cannot be banked.');
+  if(rackSig(loadOffcuts())!==RESULT.rack.sourceSig)
+    return toast('The offcut rack changed after this cut list was built. Rebuild before banking.');
   if(!RESULT.logOff) return toast("Offcut logging is off for this job — switch it on in Job settings first.");
   const R=RESULT.rack;
   const today=new Date().toISOString().slice(0,10);
   const next=[...R.unusedStock.map(o=>({material:o.material,l:o.l,w:o.w,date:o.date||today})),
               ...R.banked.map(o=>({material:o.material,l:o.l,w:o.w,date:today}))];
-  saveOffcuts(next);
+  if(!saveOffcuts(next)) return;
   toast('Rack updated — '+next.length+' offcut(s) on hand.',true);
   if(VIEW==='off') render();
 }
@@ -5504,7 +5638,18 @@ function loadMats(){
 }
 const matOf=n=>allMats().find(m=>m.name===n)||null;
 const matsOfKind=k=>allMats().filter(m=>m.kind===k);
-const matPrice=n=>est.prices[n]??MAT_DEFAULT_PRICE[n]??0;
+/* Renaming a built-in does not erase its shipped price on a fresh job. Follow the
+   rename chain back to the built-in key whenever no job-specific price exists. */
+function builtinOrigin(n){
+  for(const b of BUILTIN_MATS){
+    let cur=b.name; const seen=new Set();
+    while(BUILTIN_RENAMED[cur]&&!seen.has(cur)){ seen.add(cur); cur=BUILTIN_RENAMED[cur]; }
+    if(cur===n) return b.name;
+  }
+  return null;
+}
+const defaultMatPrice=n=>MAT_DEFAULT_PRICE[n]??MAT_DEFAULT_PRICE[builtinOrigin(n)];
+const matPrice=n=>est.prices[n]??defaultMatPrice(n)??0;
 /* A board foot is 144 cubic inches of one-inch stock, so thickness scales it. */
 const matThick=n=>{ const m=matOf(n); return m&&m.t>0?m.t:1; };
 /* A material's name is its key: parts are stamped with it, the rack names it, prices
@@ -5518,42 +5663,59 @@ function renameMaterial(from,to){
   from=String(from); to=String(to).trim();
   if(!to||to===from) return false;
   if(allMats().some(m=>m.name.toLowerCase()===to.toLowerCase())) return 'exists';
+  if(!save()) return false;                 // freeze the open job before migrating its keys
   const swap=cfg=>{ if(!cfg) return false; let hit=false;
     for(const k of RENAME_KEYS) if(cfg[k]===from){ cfg[k]=to; hit=true; } return hit; };
 
-  // the material record, whether it shipped with the app or was added
+  /* Prepare every affected record before writing any of them. A quota error halfway
+     through a rename must leave the old material usable everywhere. */
   const mats=loadMats();
   const rec=mats.find(m=>m.name===from);
   if(rec) rec.name=to;
   else { const b=BUILTIN_MATS.find(m=>m.name===from);
          if(b) mats.push({name:to,kind:b.kind,l:b.l,w:b.w,t:b.t}); }
-  BUILTIN_RENAMED[from]=to;
-  try{ localStorage.setItem(MRENAME,JSON.stringify(BUILTIN_RENAMED)); }catch(e){}
-  if(!saveMats(mats)) return false;
+  const renamed={...BUILTIN_RENAMED,[from]:to};
 
-  // the rack
   const rack=loadOffcuts(); let touched=false;
   for(const o of rack) if(o.material===from){ o.material=to; touched=true; }
-  if(touched) saveOffcuts(rack);
 
-  // prices, on this project and on the shop defaults
-  if(est.prices[from]!=null){ est.prices[to]=est.prices[from]; delete est.prices[from]; saveEst(); }
-
-  // every saved project's settings, the open job, and the shop defaults
+  const movePrice=e=>{ if(!e?.prices||e.prices[from]==null) return false;
+    e.prices[to]=e.prices[from]; delete e.prices[from]; return true; };
+  let projects=null, projectsHit=false;
   try{
-    const all=JSON.parse(localStorage.getItem(PKEY)||'{}'); let any=false;
-    for(const nm in all){
-      try{ const j=JSON.parse(all[nm].job);
-           if(swap(j.cfg)){ all[nm].job=JSON.stringify(j); any=true; } }catch(e){}
+    projects=JSON.parse(localStorage.getItem(PKEY)||'{}');
+    for(const nm in projects){
+      try{ const j=JSON.parse(projects[nm].job); let hit=swap(j.cfg);
+           if(movePrice(j.est)) hit=true;
+           if(hit){ projects[nm].job=JSON.stringify(j); projectsHit=true; } }catch(e){}
     }
-    if(any) localStorage.setItem(PKEY,JSON.stringify(all));
-  }catch(e){}
+  }catch(e){ projects=null; }
+
   const m=readMaster();
-  if(m){ let hit=swap(m.cfg);
-    if(m.est&&m.est.prices&&m.est.prices[from]!=null){
-      m.est.prices[to]=m.est.prices[from]; delete m.est.prices[from]; hit=true; }
-    if(hit) writeMaster(m);
+  let masterHit=false;
+  if(m){ masterHit=swap(m.cfg); if(movePrice(m.est)) masterHit=true; }
+  let open=null, openHit=false;
+  try{ open=JSON.parse(localStorage.getItem('bbcab')||'null');
+       if(open){ openHit=swap(open.cfg); if(movePrice(open.est)) openHit=true; } }catch(e){ open=null; }
+
+  const writes=[[MATKEY,JSON.stringify(mats)],[MRENAME,JSON.stringify(renamed)]];
+  if(touched) writes.push(['bbcab_offcuts',JSON.stringify(rack.map(o=>({
+    material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||new Date().toISOString().slice(0,10)})))]);
+  if(projectsHit) writes.push([PKEY,JSON.stringify(projects)]);
+  if(masterHit) writes.push([MKEY,JSON.stringify(m)]);
+  if(openHit) writes.push(['bbcab',JSON.stringify(open)]);
+  const before=new Map(writes.map(([k])=>[k,localStorage.getItem(k)]));
+  try{ for(const [k,v] of writes) localStorage.setItem(k,v); }
+  catch(e){
+    /* Remove the attempted values first so restoring a shorter old value does not
+       itself fail because the failed transaction filled the quota. */
+    try{ for(const [k] of writes) localStorage.removeItem(k);
+         for(const [k,v] of before) if(v!==null) localStorage.setItem(k,v); }catch(_){}
+    toast('Storage is full — the material was not renamed. Export a backup first.');
+    return false;
   }
+  BUILTIN_RENAMED=renamed;
+  if(est.prices[from]!=null){ est.prices[to]=est.prices[from]; delete est.prices[from]; }
 
   // and the fields open right now
   for(const k of RENAME_KEYS){ const el=document.getElementById(k);
@@ -5582,7 +5744,7 @@ function allMats(){
   const seen=new Set(merged.map(m=>m.name));
   return merged.concat(saved.filter(m=>!seen.has(m.name)));
 }
-const isBuiltinMat=n=>BUILTIN_MATS.some(m=>m.name===n);
+const isBuiltinMat=n=>builtinOrigin(n)!==null;
 function matKind(n){
   const m=allMats().find(x=>x.name===n);
   if(m) return m.kind;
@@ -5729,14 +5891,14 @@ function renderOffcutLib(){
       const rest=loadOffcuts().filter(o=>ocKey(o)!==g.key);
       for(let i=0;i<res.qty;i++)
         rest.push({material:res.material,l:res.l,w:res.w,date:g.date||today});
-      saveOffcuts(rest); renderOffcutLib();
+      if(!saveOffcuts(rest)) return; renderOffcutLib();
       toast(res.qty?'Offcut updated.':'Offcut removed.',true);
     };
     const del=document.createElement('button'); del.className='del'; del.textContent='Delete';
     del.onclick=async()=>{
       if(!await uiConfirm('Delete these?',g.n+' piece'+(g.n>1?'s':'')+' of '+g.material+' at '+
         fmt(g.l)+'" \u00d7 '+fmt(g.w)+'".','Delete',true)) return;
-      saveOffcuts(loadOffcuts().filter(o=>ocKey(o)!==g.key));
+      if(!saveOffcuts(loadOffcuts().filter(o=>ocKey(o)!==g.key))) return;
       renderOffcutLib(); toast('Removed from the rack.',true);
     };
     const btns=document.createElement('div'); btns.style.cssText='display:flex;gap:6px;flex:none';
@@ -5911,7 +6073,7 @@ function dailyBackup(){
   let tried=localStorage.getItem(BK_TRY)===day;
   if(!tried){
     localStorage.setItem(BK_TRY,day);
-    try{ backup(true); tried=true; }catch(e){ tried=false; }
+    try{ tried=backup(true)!==false; }catch(e){ tried=false; }
   }
   showBackupBar(tried
     ? 'Daily backup: '+backupName()+' should have downloaded. If nothing appeared, tap Save it now.'
@@ -5919,7 +6081,7 @@ function dailyBackup(){
 }
 function wireBackupBar(){
   document.getElementById('bkSave').onclick=()=>{     // a real tap, so this one sticks
-    backup(); localStorage.setItem(BK_LAST,today()); hideBackupBar();
+    if(backup()!==false){ localStorage.setItem(BK_LAST,today()); hideBackupBar(); }
   };
   document.getElementById('bkDone').onclick=()=>{
     localStorage.setItem(BK_LAST,today()); hideBackupBar();
@@ -5946,14 +6108,16 @@ function exportCSV(){
   }
 }
 function backup(quiet){
-  save();
+  if(!save()) return false;
   dlq(quiet,backupName(),
      JSON.stringify({job:JSON.parse(localStorage.getItem('bbcab')||'{}'),
                      offcuts:JSON.parse(localStorage.getItem('bbcab_offcuts')||'[]'),
                      master:JSON.parse(localStorage.getItem(MKEY)||'null'),
                      materials:JSON.parse(localStorage.getItem(MATKEY)||'[]'),
+                     material_renames:JSON.parse(localStorage.getItem(MRENAME)||'{}'),
                      projects:JSON.parse(localStorage.getItem(PKEY)||'{}')}),
      'application/json');
+  return true;
 }
 function restore(){
   const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json';
@@ -5967,6 +6131,8 @@ function restore(){
         if(d.offcuts) localStorage.setItem('bbcab_offcuts',JSON.stringify(d.offcuts));
         if(d.master) localStorage.setItem(MKEY,JSON.stringify(d.master));
         if(d.materials) localStorage.setItem(MATKEY,JSON.stringify(d.materials));
+        if(d.material_renames) localStorage.setItem(MRENAME,JSON.stringify(d.material_renames));
+        else localStorage.removeItem(MRENAME);
         if(d.projects) localStorage.setItem(PKEY,JSON.stringify(d.projects));
         hardReload();
       }catch(e){ toast("That file isn't a Cabinet Planner backup."); }
@@ -5978,8 +6144,8 @@ function restore(){
 
 /* ================= persistence ================= */
 function save(){
-  if(typeof masterMode!=='undefined'&&masterMode) return;   // not the project's numbers
-  if(typeof reloading!=='undefined'&&reloading) return;     // mid-reload; the job on disk is the new one
+  if(typeof masterMode!=='undefined'&&masterMode) return true;   // not the project's numbers
+  if(typeof reloading!=='undefined'&&reloading) return true;     // mid-reload; the job on disk is the new one
   readEst();                                                // pull rates/hardware/finish off the DOM first
   const d={v:5,state,cfg:{},totals:{},
     built:!!RESULT&&document.getElementById('results').classList.contains('on'),
@@ -5997,7 +6163,8 @@ function save(){
              ff:document.getElementById('off_log_ff').value}};
   for(const k of CFG_KEYS) d.cfg[k]=document.getElementById(k).value;
   for(const r of RUNS) d.totals[r]=document.querySelector('.totalw[data-run="'+r+'"]').value;
-  try{ localStorage.setItem('bbcab',JSON.stringify(d)); }catch(e){}
+  try{ localStorage.setItem('bbcab',JSON.stringify(d)); return true; }
+  catch(e){ toast('Storage is full — export a backup first.'); return false; }
 }
 function load(){
   let d; try{ d=JSON.parse(localStorage.getItem('bbcab')); }catch(e){}
