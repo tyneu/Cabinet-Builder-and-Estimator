@@ -1334,12 +1334,12 @@ function chooseLayout(parts,material,budget){
   if(!scored.length) return null;
   scored.sort((a,b)=>cmpArr(a[0],b[0]));
 
-  /* Re-score complete candidates without rebuilding free space from part outlines.
-     The base packers carry exact kerf-adjusted leftovers; the old compaction pass did
-     not, so it could fit a part into wood consumed by a saw cut. */
+  /* Re-score after safely mixing orientations. The base packers carry exact,
+     kerf-adjusted free rectangles, so compaction can rotate individual pieces without
+     reconstructing phantom space from their finished outlines. */
   const finals=[];
   for(const [key,name,sheets,m] of scored.slice(0,8)){
-    const c=sheets;
+    const c=compactSheets(sheets,material);
     const cm=layoutMetrics(c);
     finals.push([[cm.sheets,...key.slice(1)],name,c,cm]);
   }
@@ -1366,8 +1366,27 @@ function retightenCuts(sheets,material){
    sheets, trying BOTH orientations per part. Free rects already treat the mid-cut
    as an obstacle, so nothing straddles the breakdown cut. */
 function sheetFreeRects(sh){
-  const keep=sh.filter(p=>p.kind==='part'||p.kind==='cut-line');
-  return freeRects(keep,SHEET_W,SHEET_L);
+  /* offcutsFromFree records every positive free rectangle, including trash. These
+     are the packer's real disjoint leftovers with all kerfs already removed. */
+  const out=sh.filter(p=>p.kind==='offcut').map(p=>[p.x,p.y,p.w,p.h]);
+  /* A guillotine split can leave two touching rectangles even though no kerf runs
+     between them. Join exact shared edges only; a real saw gap remains a gap. */
+  let joined=true;
+  while(joined){
+    joined=false;
+    outer:for(let i=0;i<out.length;i++) for(let j=i+1;j<out.length;j++){
+      const a=out[i],b=out[j]; let m=null;
+      if(Math.abs(a[1]-b[1])<=EPS&&Math.abs(a[3]-b[3])<=EPS){
+        if(Math.abs(a[0]+a[2]-b[0])<=EPS) m=[a[0],a[1],a[2]+b[2],a[3]];
+        else if(Math.abs(b[0]+b[2]-a[0])<=EPS) m=[b[0],a[1],a[2]+b[2],a[3]];
+      }else if(Math.abs(a[0]-b[0])<=EPS&&Math.abs(a[2]-b[2])<=EPS){
+        if(Math.abs(a[1]+a[3]-b[1])<=EPS) m=[a[0],a[1],a[2],a[3]+b[3]];
+        else if(Math.abs(b[1]+b[3]-a[1])<=EPS) m=[a[0],b[1],a[2],a[3]+b[3]];
+      }
+      if(m){ out.splice(j,1); out[i]=m; joined=true; break outer; }
+    }
+  }
+  return out;
 }
 function fitRect(rects,L,S){
   let best=null;
@@ -1399,12 +1418,12 @@ function splitRect(rects,f){
     if(w>=MIN_SCRAP_DIM-EPS&&h>=MIN_SCRAP_DIM-EPS) rects.push([x,y,w,h]);
 }
 function compactSheets(sheets,material){
-  let work=sheets.map(s=>s.slice());
-  for(let pass=0;pass<work.length;pass++){
+  let work=sheets.map(s=>s.map(p=>({...p})));
+  for(let pass=0;pass<sheets.length;pass++){
     const counts=work.map((s,i)=>[s.filter(p=>p.kind==='part').length,i]).sort((a,b)=>a[0]-b[0]);
     let moved=false;
     for(const [,di] of counts){
-      const donor=work[di].filter(p=>p.kind==='part');
+      const donor=work[di].filter(p=>p.kind==='part').sort((a,b)=>b.w*b.h-a.w*a.h);
       if(!donor.length) continue;
       const targets=work.map((s,i)=>i).filter(i=>i!==di);
       const rects={}; for(const i of targets) rects[i]=sheetFreeRects(work[i]);
@@ -1412,12 +1431,14 @@ function compactSheets(sheets,material){
       let ok=true;
       for(const part of donor){
         const L=Math.max(part.w,part.h), S=Math.min(part.w,part.h);
-        let placed=false;
+        let pick=null;
         for(const i of targets){
           const f=fitRect(rects[i],L,S);
-          if(f){ splitRect(rects[i],f); plan.push({sheet:i,part,x:f.x,y:f.y,w:f.w,h:f.h}); placed=true; break; }
+          if(f&&(!pick||f.waste<pick.f.waste)) pick={i,f};
         }
-        if(!placed){ ok=false; break; }
+        if(!pick){ ok=false; break; }
+        splitRect(rects[pick.i],pick.f);
+        plan.push({sheet:pick.i,part,x:pick.f.x,y:pick.f.y,w:pick.f.w,h:pick.f.h});
       }
       if(!ok) continue;
       const touched=new Set();
@@ -1426,12 +1447,8 @@ function compactSheets(sheets,material){
         touched.add(m.sheet);
       }
       for(const i of touched){
-        const cut=work[i].find(p=>p.kind==='cut-line');
-        const base=work[i].filter(p=>p.kind==='part');
-        const rebuilt=[]; if(cut) rebuilt.push(cut);
-        rebuilt.push(...base);
-        const out=rebuilt.filter(p=>p.kind!=='cut-line');
-        addOffcuts(out,SHEET_W,SHEET_L,material,cut?cut.y:null,false);
+        const out=work[i].filter(p=>p.kind!=='offcut');
+        offcutsFromFree(out,rects[i],material);
         work[i]=out;
       }
       work.splice(di,1);
