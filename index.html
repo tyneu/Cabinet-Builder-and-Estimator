@@ -1008,9 +1008,9 @@ function centerCut(rects,stockL=SHEET_L){
   valid.sort((a,b)=>{
     const ae=edgeKeys.has(r4(a))?0:1, be=edgeKeys.has(r4(b))?0:1;
     if(ae!==be) return ae-be;
-    const am=maxEmpty(a), bm=maxEmpty(b);
-    if(am!==bm) return bm-am;
-    return Math.abs(a-stockL/2)-Math.abs(b-stockL/2);
+    const ac=Math.abs(a-stockL/2), bc=Math.abs(b-stockL/2);
+    if(Math.abs(ac-bc)>EPS) return ac-bc;
+    return maxEmpty(b)-maxEmpty(a);
   });
   return valid[0];
 }
@@ -1212,36 +1212,99 @@ function guillotineCuts(rects){
   return solve([...Array(n).keys()]);
 }
 
-/* Estimate shop effort from the actual layout. Each physical cut is one point and
-   each distinct resulting dimension is another point for setting the fence/stop.
-   Repeating a size is therefore cheap; changing sizes is deliberately expensive. */
+/* Build a feasible guillotine sequence from the printed layout. A cut is counted
+   once when it separates two sub-panels; aligned pieces can therefore share the cut
+   before being ripped apart. Settings include direction as well as dimension, so a
+   21 3/8 crosscut and a 21 3/8 rip are not incorrectly treated as one setup. */
+function cutPlan(parts,region){
+  if(!parts.length) return {operations:0,settings:new Set()};
+  const memo=new Map();
+  const pIndex=new Map(parts.map((p,i)=>[p,i]));
+  const sk=(axis,n)=>axis+'|'+r4(n);
+  const merge=(a,b,extra)=>{
+    const settings=new Set([...a.settings,...b.settings]);
+    if(extra) settings.add(extra);
+    return {operations:a.operations+b.operations+(extra?1:0),settings};
+  };
+  const cmp=(a,b)=>{
+    const ak=[a.operations+a.settings.size,a.settings.size,a.operations];
+    const bk=[b.operations+b.settings.size,b.settings.size,b.operations];
+    return cmpArr(ak,bk);
+  };
+  function solve(ps,box){
+    const x0=Math.min(...ps.map(p=>p.x)), y0=Math.min(...ps.map(p=>p.y));
+    const x1=Math.max(...ps.map(p=>p.x+p.w)), y1=Math.max(...ps.map(p=>p.y+p.h));
+    const key=ps.map(p=>pIndex.get(p)).sort((a,b)=>a-b).join(',')+
+      '|'+[...box,x0,y0,x1,y1].map(r4).join(',');
+    if(memo.has(key)) return memo.get(key);
+    let trimOps=0; const trimSettings=new Set();
+    if(x0>box[0]+EPS){ trimOps++; trimSettings.add(sk('rip',x1-x0)); }
+    if(x1<box[2]-EPS){ trimOps++; trimSettings.add(sk('rip',x1-x0)); }
+    if(y0>box[1]+EPS){ trimOps++; trimSettings.add(sk('cross',y1-y0)); }
+    if(y1<box[3]-EPS){ trimOps++; trimSettings.add(sk('cross',y1-y0)); }
+    if(ps.length===1){
+      const out={operations:trimOps,settings:trimSettings}; memo.set(key,out); return out;
+    }
+    const candidates=[];
+    const rights=[...new Set(ps.map(p=>r4(p.x+p.w)))].sort((a,b)=>a-b);
+    for(const edge of rights){
+      const left=ps.filter(p=>p.x+p.w<=edge+EPS), right=ps.filter(p=>p.x+p.w>edge+EPS);
+      if(!left.length||!right.length) continue;
+      const next=Math.min(...right.map(p=>p.x));
+      if(next<edge-EPS) continue;
+      const a=solve(left,[x0,y0,edge,y1]), b=solve(right,[next,y0,x1,y1]);
+      for(const dim of [edge-x0,x1-next]) candidates.push(merge(a,b,sk('rip',dim)));
+    }
+    const bottoms=[...new Set(ps.map(p=>r4(p.y+p.h)))].sort((a,b)=>a-b);
+    for(const edge of bottoms){
+      const top=ps.filter(p=>p.y+p.h<=edge+EPS), bottom=ps.filter(p=>p.y+p.h>edge+EPS);
+      if(!top.length||!bottom.length) continue;
+      const next=Math.min(...bottom.map(p=>p.y));
+      if(next<edge-EPS) continue;
+      const a=solve(top,[x0,y0,x1,edge]), b=solve(bottom,[x0,next,x1,y1]);
+      for(const dim of [edge-y0,y1-next]) candidates.push(merge(a,b,sk('cross',dim)));
+    }
+    let core;
+    if(candidates.length) core=candidates.sort(cmp)[0];
+    else{
+      /* Defensive fallback for a non-slicing placement. It is intentionally
+         conservative: every part gets one length and one width pass. */
+      const settings=new Set();
+      for(const p of ps){ settings.add(sk('rip',p.w)); settings.add(sk('cross',p.h)); }
+      core={operations:ps.length*2,settings};
+    }
+    const out={operations:trimOps+core.operations,
+               settings:new Set([...trimSettings,...core.settings])};
+    memo.set(key,out); return out;
+  }
+  return solve(parts,region);
+}
+
+const CUT_WORK_CACHE=new Map();
 function sheetCutWork(sh){
+  const cacheKey=SHEET_W+'|'+SHEET_L+'|'+KERF+'|'+sh.filter(p=>p.kind==='part'||p.kind==='cut-line')
+    .map(p=>[p.kind,p.id??'',r4(p.x),r4(p.y),r4(p.w),r4(p.h)].join(':')).sort().join(';');
+  if(CUT_WORK_CACHE.has(cacheKey)) return CUT_WORK_CACHE.get(cacheKey);
   const parts=sh.filter(p=>p.kind==='part');
   const mids=sh.filter(p=>p.kind==='cut-line').sort((a,b)=>a.y-b.y);
-  const bounds=[0,...mids.flatMap(c=>[c.y,c.y+c.h]),SHEET_L];
-  const zoneOf=p=>{
-    for(let z=0;z<=mids.length;z++){
-      const lo=bounds[z*2]??0, hi=bounds[z*2+1]??SHEET_L;
-      if(p.y>=lo-EPS&&p.y+p.h<=hi+EPS) return [z,lo,hi];
-    }
-    return [0,0,SHEET_L];
-  };
-  const ripRuns=new Set(), settings=new Set(); let crossOps=0;
-  for(const p of parts){
-    const [z,lo,hi]=zoneOf(p);
-    if(p.w<SHEET_W-EPS){
-      ripRuns.add(z+'|'+r4(p.x)+'|'+r4(p.w));
-      settings.add(r4(p.w));
-    }
-    if(p.h<hi-lo-EPS){ crossOps++; settings.add(r4(p.h)); }
+  const settings=new Set(); let operations=mids.length;
+  const zones=[]; let y=0;
+  for(const c of mids){ zones.push([y,c.y]); y=c.y+c.h; settings.add('cross|'+r4(c.y)); }
+  zones.push([y,SHEET_L]);
+  for(const [lo,hi] of zones){
+    const zp=parts.filter(p=>p.y>=lo-EPS&&p.y+p.h<=hi+EPS);
+    const plan=cutPlan(zp,[0,lo,SHEET_W,hi]);
+    operations+=plan.operations;
+    for(const s of plan.settings) settings.add(s);
   }
-  for(const c of mids) settings.add(r4(c.y));
-  const operations=ripRuns.size+crossOps+mids.length;
-  return {operations,settings};
+  const out={operations,settings};
+  if(CUT_WORK_CACHE.size>2000) CUT_WORK_CACHE.clear();
+  CUT_WORK_CACHE.set(cacheKey,out);
+  return out;
 }
 
 function layoutMetrics(sheets){
-  let partArea=0,keepArea=0,invArea=0,maxInv=0,noMid=0,totalCuts=0,scatter=0;
+  let partArea=0,keepArea=0,invArea=0,maxInv=0,noMid=0,totalCuts=0,scatter=0,midOffset=0;
   const cutSettings=new Set();
   const mids=[];
   for(const sh of sheets){
@@ -1257,6 +1320,7 @@ function layoutMetrics(sheets){
     }
     const hasMid=sh.some(p=>p.kind==='cut-line');
     mids.push(hasMid);
+    for(const c of sh.filter(p=>p.kind==='cut-line')) midOffset+=Math.abs(c.y+c.h/2-SHEET_L/2);
     const oversized=prs.some(([,,w,h])=>Math.max(w,h)>CENTER_HI+EPS);
     if(!hasMid&&!oversized) noMid++;
     const cw=sheetCutWork(sh); totalCuts+=cw.operations;
@@ -1265,13 +1329,27 @@ function layoutMetrics(sheets){
   const trashArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-keepArea);
   const unusableArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-invArea);
   return {sheets:sheets.length,noMid,cuts:totalCuts,settings:cutSettings.size,
-          work:totalCuts+cutSettings.size,invArea,maxInv,trashArea,unusableArea,mids,scatter};
+          work:totalCuts+cutSettings.size,midOffset,invArea,maxInv,trashArea,unusableArea,mids,scatter};
 }
 
 function layoutKey(m){
   return [m.noMid,r4(m.sheets*SHEET_WORK_COST+m.work),m.settings,m.cuts,
-          Math.round(m.unusableArea*100)/100,-Math.round(m.maxInv*100)/100,
+          Math.round(m.midOffset*100)/100,Math.round(m.unusableArea*100)/100,-Math.round(m.maxInv*100)/100,
           -Math.round(m.invArea*100)/100,m.scatter,m.sheets];
+}
+
+/* Natural packers often leave a perfectly good breakdown path but do not insert it
+   until after the winner is chosen. Insert that real cut before scoring so natural
+   and forced-mid candidates are compared on equal terms. */
+function withBreakdowns(sheets,material){
+  return sheets.map(sheet=>{
+    let sh=sheet.map(p=>({...p}));
+    if(sh.some(p=>p.kind==='cut-line')) return sh;
+    const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
+    const y=centerCut(prs,SHEET_L);
+    if(y!=null) sh=applyMidCut(sh,y,material);
+    return sh;
+  });
 }
 
 const sheetUtil=sh=>sh.filter(p=>p.kind==='part').reduce((a,p)=>a+p.w*p.h,0)/(SHEET_W*SHEET_L);
@@ -1324,8 +1402,12 @@ function bestCrosscut(parts,material,omap){
     const [sheets,offs]=packSheetsCrosscut(parts,material,y,omap);
     const placed=sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0);
     if(placed===total){
-      const m=layoutMetrics(sheets);
-      const key=[...layoutKey(m),Math.abs(y-SHEET_L/2)];
+      const invs=sheets.flatMap(sh=>sh.filter(p=>p.kind==='offcut'&&p.tier==='inventory').map(p=>p.w*p.h));
+      const maxInv=invs.length?Math.max(...invs):0, invArea=invs.reduce((a,b)=>a+b,0);
+      /* This is only a preliminary y search. Full sequence scoring happens when the
+         resulting candidate joins the main pool; keep this inner loop inexpensive. */
+      const key=[sheets.length,Math.abs(y+KERF/2-SHEET_L/2),
+                 -Math.round(maxInv*100)/100,-Math.round(invArea*100)/100];
       if(!best||cmpArr(key,best[0])<0) best=[key,sheets,offs,y];
     }
   }
@@ -1418,8 +1500,9 @@ function chooseLayout(parts,material,budget){
   const scored=[];
   for(const [name,sheets] of cands){
     if(sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0)!==total) continue;
-    const m=layoutMetrics(sheets);
-    scored.push([layoutKey(m),name,sheets,m]);
+    const ready=withBreakdowns(sheets,material);
+    const m=layoutMetrics(ready);
+    scored.push([layoutKey(m),name,ready,m]);
   }
   if(!scored.length) return null;
   scored.sort((a,b)=>cmpArr(a[0],b[0]));
@@ -3820,7 +3903,7 @@ function viewMap(body,sum,g){
       :'');
   let h='';
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Cuts / settings</th><th>Strategy</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Est. cuts / setups</th><th>Strategy</th></tr></thead><tbody>';
     for(const m of N.materials)
       h+='<tr><td>'+m.material+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
         '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.settings:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
