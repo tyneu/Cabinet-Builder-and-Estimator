@@ -372,7 +372,7 @@ details.cfg[open] .cfgbody{margin-top:12px}
 .cfgsec span{font-size:9px;letter-spacing:.06em;text-transform:none;font-weight:500;
   color:var(--ink-2);font-style:italic}
 body.printing #results,body.printing #builder,body.printing #assumpCard,
-body.printing #priceCard,body.printing #timeCard,body.printing #home,
+body.printing #matCard,body.printing #priceCard,body.printing #timeCard,body.printing #home,
 body.printing #masterEdit,body.printing #offcutEdit,body.printing .actions,
 body.printing .toast{display:none!important}
 body.printing #printPack{display:block}
@@ -382,7 +382,7 @@ body.printing #printPack{display:block}
   border-bottom:2px solid #0f3a57;padding-bottom:5px;margin:0 0 10px}
 @media print{
   header,.actions,.tabs,#builder,.hint,.btn-ghost,#assumpCard,
-  #priceCard,#timeCard,#projBar,.toast,.printbar{display:none!important}
+  #matCard,#priceCard,#timeCard,#projBar,.toast,.printbar{display:none!important}
   #printPack{display:block!important}
   body.printing #results{display:none!important}
   body{background:#fff;font-size:11pt}
@@ -441,6 +441,7 @@ body.printing .wrap{padding-bottom:120px}
     <h2>Shop defaults <span class="mtag">master</span></h2>
     <div class="hint" style="margin:0 0 12px">Every new project starts from these. Changing them inside a project only affects that project.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn-ghost btn-sm" id="hEditMats">Materials</button>
       <button class="btn-ghost btn-sm" id="hEditMaster">Dimensions &amp; construction</button>
       <button class="btn-ghost btn-sm" id="hEditPrice">Prices</button>
       <button class="btn-ghost btn-sm" id="hEditEst">Task times</button>
@@ -491,12 +492,6 @@ body.printing .wrap{padding-bottom:120px}
     <h2>On the rack</h2>
     <div id="ocList"></div>
     <button class="btn-primary" id="ocAdd" style="width:100%;margin-top:12px">Add an offcut</button>
-  </div>
-  <div class="card">
-    <h2>Materials</h2>
-    <div id="ocMats" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-    <div class="hint">Sheets are priced per sheet, sticks per stick, lumber per board foot. Built-in materials keep their name and kind but their size and price can be edited; ones you add can be removed while nothing on the rack is using them. Lumber types appear in every run's <b>Cut from &rarr; Boards</b> picker.</div>
-    <button class="btn-ghost btn-sm" id="ocAddMat" style="margin-top:10px">Add a material</button>
   </div>
   <div class="card">
     <button class="btn-primary" id="ocDone" style="width:100%">Done</button>
@@ -559,6 +554,17 @@ body.printing .wrap{padding-bottom:120px}
         <option value="no" selected>No — don't track</option></select></div>
     </div>
     <div class="hint">Toe kick always stays with the carcasses. Type fractions the way you read them: <b>34 1/2</b>, <b>3/4</b>, or <b>20.4375</b>. Construction type is recorded but doesn't change parts yet.</div>
+  </div>
+
+  <div class="card" id="matCard">
+    <details class="cfg" id="matBox">
+      <summary>Materials</summary>
+      <div class="cfgbody">
+        <div class="fieldnote" style="margin:0 0 10px">Materials are <b>shop-wide</b> &mdash; one list shared by every project, not part of this job. A change here changes every project at once, and Cancel in the shop defaults editor will not undo it. Sizes set here are what the cut maps nest against; thickness is what part sizes and board feet are figured on. Prices live under <b>Price defaults</b>.</div>
+        <div id="ocMats"></div>
+        <button class="btn-ghost btn-sm" id="ocAddMat" style="margin-top:10px">Add a material</button>
+      </div>
+    </details>
   </div>
 
   <div class="card" id="cfgCard">
@@ -3297,8 +3303,7 @@ function build(){
     document.getElementById('results').classList.add('on');
     document.getElementById('btnBack').style.display='';
     btn.disabled=false; btn.textContent='Rebuild';
-    const usedMats=[...new Set(RESULT.parts.map(p=>p.mat))];
-    renderPriceRows(usedMats);
+    renderPriceRows();
     fillAssump(); render(); window.scrollTo(0,0);
   },30);
 }
@@ -3362,6 +3367,7 @@ function render(){
   if(!tabDefs().some(t=>t.id===VIEW)) VIEW='layout';
   renderTabs();
   const on=(VIEW==='est'||VIEW==='timer')?'':'none';
+  document.getElementById('matCard').style.display=on;
   document.getElementById('priceCard').style.display=on;
   document.getElementById('timeCard').style.display=on;
   const sum=document.getElementById('resSummary');
@@ -3783,23 +3789,37 @@ function renderTaskRows(){
     host.append(row);
   }
 }
-function renderPriceRows(mats){
+/* One line per material in the registry, so the two lists cannot drift apart. The
+   unit follows the kind: a sheet is priced per sheet, a stick per stick, lumber by the
+   board foot. Sizes are set on the material itself under Materials. */
+function renderPriceRows(){
   const host=document.getElementById('priceRows');
+  if(!host) return;
   host.innerHTML='';
-  const list=mats&&mats.length?mats:Object.keys(DEFAULT_PRICES);
-  for(const m of list){
-    if(est.prices[m]==null) est.prices[m]=DEFAULT_PRICES[m]??60;
-    const row=document.createElement('div'); row.className='pricerow';
-    const nm=document.createElement('div'); nm.className='nm';
-    nm.innerHTML='<span></span><small></small>';
-    nm.firstChild.textContent=m;
-    nm.lastChild.textContent=m===POPLAR?'per '+fmt(8)+' ft stick':'per 4x8 sheet';
-    const w=document.createElement('div');
-    w.innerHTML='<label>$ each</label>';
-    const i=document.createElement('input');
-    i.inputMode='decimal'; i.value=est.prices[m];
-    i.oninput=()=>{ est.prices[m]=parseFloat(i.value)||0; saveEst(); };
-    w.append(i); row.append(nm,w); host.append(row);
+  for(const kind of MAT_KINDS){
+    const list=matsOfKind(kind);
+    if(!list.length) continue;
+    for(const m of list){
+      const n=m.name;
+      /* Not seeded into est.prices. Writing a 0 here would look like "this material is
+         free" and a lumber type would stop being charged the moment its line was drawn.
+         The field shows what it would actually cost; typing is what commits a price. */
+      const eff=est.prices[n]??MAT_DEFAULT_PRICE[n]??
+                (kind==='lumber'?(est.millbf||0):0);
+      const row=document.createElement('div'); row.className='pricerow';
+      const nm=document.createElement('div'); nm.className='nm';
+      nm.innerHTML='<span></span><small></small>';
+      nm.firstChild.textContent=n;
+      nm.lastChild.textContent=kind==='lumber'
+        ? MAT_UNIT[kind]+' \u00b7 '+fmt(m.t)+'" thick'
+        : MAT_UNIT[kind]+' \u00b7 '+fmt(m.l)+'" \u00d7 '+fmt(m.w)+'"';
+      const w=document.createElement('div');
+      w.innerHTML='<label>'+(kind==='lumber'?'$ / bd ft':'$ each')+'</label>';
+      const i=document.createElement('input');
+      i.inputMode='decimal'; i.value=eff;
+      i.oninput=()=>{ est.prices[n]=parseFloat(i.value)||0; saveEst(); };
+      w.append(i); row.append(nm,w); host.append(row);
+    }
   }
 }
 function readEst(){
@@ -5137,7 +5157,7 @@ let reloading=false;
 function hardReload(){ reloading=true; location.reload(); }
 function borrowCards(into){
   cardSlots=[];
-  for(const id of ['cfgCard','priceCard','timeCard']){
+  for(const id of ['matCard','cfgCard','priceCard','timeCard']){
     const el=document.getElementById(id);
     if(!el) continue;
     cardSlots.push({el,parent:el.parentNode,next:el.nextSibling,disp:el.style.display});
@@ -5155,6 +5175,7 @@ function enterMasterEdit(focus){
   if(m) applyMaster(m);                        // otherwise seed from what is open
   masterMode=true;
   borrowCards(document.getElementById('masterHost'));
+  document.getElementById('matBox').open=(focus==='mat');
   document.getElementById('cfgBox').open=(focus==='cfg');
   document.getElementById('timeBox').open=(focus==='est');
   document.getElementById('priceBox').open=(focus==='price');
@@ -5196,6 +5217,7 @@ function showHome(on){
     document.getElementById('btnBuild').textContent='Rebuild';
     render();                                  // repaints whichever tab you left on
   }else{
+    document.getElementById('matCard').style.display=on?'none':'';
     document.getElementById('priceCard').style.display=on?'none':'';
     document.getElementById('timeCard').style.display=on?'none':'';
   }
@@ -5254,6 +5276,7 @@ function homeInit(){
     hardReload();
   };
   document.getElementById('hContinue').onclick=()=>showHome(false);
+  document.getElementById('hEditMats').onclick=()=>enterMasterEdit('mat');
   document.getElementById('hEditMaster').onclick=()=>enterMasterEdit('cfg');
   document.getElementById('hEditPrice').onclick=()=>enterMasterEdit('price');
   document.getElementById('hEditEst').onclick=()=>enterMasterEdit('est');
@@ -5284,7 +5307,8 @@ function homeInit(){
   document.getElementById('ocAddMat').onclick=async()=>{
     const m=await matForm();
     if(!m) return;
-    if(saveMats(loadMats().concat([m]))){ renderOffcutLib(); toast('Added "'+m.name+'".',true); }
+    if(saveMats(loadMats().concat([m]))){
+      renderMats(); renderPriceRows(); initStockSelects(); toast('Added "'+m.name+'".',true); }
   };
   document.getElementById('hBackup').onclick=backup;
   document.getElementById('hRestore').onclick=restore;
@@ -5478,18 +5502,14 @@ function matForm(existing){
       grid.style.cssText=lum?'':'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px';
     };
 
-    const pw=document.createElement('div'); pw.innerHTML='<label>Price</label>';
-    const pi=document.createElement('input'); pi.className='sheetin'; pi.inputMode='decimal';
-    pw.append(pi); box.append(pw);
     const note=document.createElement('div'); note.className='fieldnote'; box.append(note);
     const sync=()=>{
-      note.textContent='Price is '+MAT_UNIT[sel.value]+
+      note.textContent='Priced '+MAT_UNIT[sel.value]+', set under Price defaults'+
         (sel.value==='lumber'
           ? '. Lumber comes in every size, so only thickness is recorded \u2014 it is what a board foot is figured on. 4/4 is 1".'
           : '. Length and width are the size one comes in, and they are what the cut maps nest against.');
     };
     sel.onchange=()=>{ sync(); sized(); }; sync(); sized();
-    if(existing) pi.value=matPrice(existing.name);
 
     sheetBtns(box,close,[{label:'Cancel',v:null},{label:existing?'Save':'Add',kind:'go',act:c=>{
       const n=inp.value.trim();
@@ -5502,8 +5522,7 @@ function matForm(existing){
       const L=lum?96:parseFrac(li.value), W=lum?8:parseFrac(wi.value);
       if(!lum&&[L,W].some(v=>v===null||isNaN(v)||v<=0))
         return toast('Length and width both need a positive number.');
-      const price=parseFloat(pi.value);
-      c({name:n,kind:sel.value,l:L,w:W,t:T,price:isNaN(price)?null:price});
+      c({name:n,kind:sel.value,l:L,w:W,t:T});
     }}]);
     setTimeout(()=>{ if(!inp.disabled) inp.focus(); },60);
   });
@@ -5543,9 +5562,14 @@ function renderOffcutLib(){
     btns.append(edit,del); row.append(left,btns); host.append(row);
   }
 
+}
+
+/* Shop-wide, so it paints on its own rather than only when the rack is open. */
+function renderMats(){
   const mh=document.getElementById('ocMats');
+  if(!mh) return;
   mh.innerHTML='';
-  const inUse=new Set(rack.map(o=>o.material));
+  const inUse=new Set(loadOffcuts().map(o=>o.material));
   /* Grouped by how they are bought, since that is what the size and the price mean. */
   for(const kind of MAT_KINDS){
     const list=matsOfKind(kind);
@@ -5560,16 +5584,14 @@ function renderOffcutLib(){
       const l=document.createElement('div'); l.style.minWidth='0';
       const a=document.createElement('div'); a.className='oc1'; a.textContent=m.name;
       const b=document.createElement('div'); b.className='oc2';
-      b.textContent=(kind==='lumber'?fmt(m.t)+'" thick'
-                       :fmt(m.l)+'" \u00d7 '+fmt(m.w)+'" \u00d7 '+fmt(m.t)+'"')+
-                    '  \u00b7  $'+(matPrice(m.name)||0)+' '+MAT_UNIT[kind];
+      b.textContent=kind==='lumber'?fmt(m.t)+'" thick'
+                     :fmt(m.l)+'" \u00d7 '+fmt(m.w)+'" \u00d7 '+fmt(m.t)+'" thick';
       l.append(a,b);
       const btns=document.createElement('div'); btns.style.cssText='display:flex;gap:6px;flex:none';
       const ed=document.createElement('button'); ed.className='edit'; ed.textContent='Edit';
       ed.onclick=async()=>{
         const res=await matForm(m);
         if(!res) return;
-        if(res.price!=null){ est.prices[res.name]=res.price; saveEst(); }
         if(!isBuiltinMat(m.name)){
           const next=loadMats().filter(x=>x.name!==m.name).concat([
             {name:res.name,kind:res.kind,l:res.l,w:res.w,t:res.t}]);
@@ -5580,7 +5602,7 @@ function renderOffcutLib(){
             {name:m.name,kind:m.kind,l:res.l,w:res.w,t:res.t}]);
           if(!saveMats(next)) return;
         }
-        renderOffcutLib(); initStockSelects(); toast('Material updated.',true);
+        renderMats(); renderPriceRows(); initStockSelects(); toast('Material updated.',true);
       };
       btns.append(ed);
       if(!isBuiltinMat(m.name)){
@@ -5589,7 +5611,7 @@ function renderOffcutLib(){
           if(inUse.has(m.name)) return toast('"'+m.name+'" is on the rack \u2014 clear those pieces first.');
           if(!await uiConfirm('Remove "'+m.name+'"?','It comes off the material list. Nothing else changes.','Remove',true)) return;
           if(saveMats(loadMats().filter(x2=>x2.name!==m.name))){
-            renderOffcutLib(); initStockSelects(); toast('Material removed.',true); }
+            renderMats(); renderPriceRows(); initStockSelects(); toast('Material removed.',true); }
         };
         btns.append(x);
       }
@@ -5887,7 +5909,7 @@ initDefaults();
 renderInclude();
 applyInclude();
 renderTaskRows();
-renderPriceRows();
+renderPriceRows(); renderMats();
 syncEstInputs();
 homeInit();
 paintProjBar();
