@@ -885,6 +885,7 @@ const TRASH_MIN_DIM=3, TRASH_MIN_AREA=72;
 const STORE_MIN_DIM=6, STORE_MIN_AREA=144;
 const MIN_SCRAP_DIM=TRASH_MIN_DIM;
 const FULL_UTIL=0.60, SHEET_BREAKDOWN_CUTS=2;
+const SHEET_WORK_COST=10;             // one sheet ~= 5 new settings or 10 repeated cuts
 const r4=v=>Math.round(v*1e6)/1e6;   // 1/32 and 1/64 need more than 4 places
 
 function orient(L,S,bw,bl,mode,noRotate){
@@ -1211,8 +1212,37 @@ function guillotineCuts(rects){
   return solve([...Array(n).keys()]);
 }
 
+/* Estimate shop effort from the actual layout. Each physical cut is one point and
+   each distinct resulting dimension is another point for setting the fence/stop.
+   Repeating a size is therefore cheap; changing sizes is deliberately expensive. */
+function sheetCutWork(sh){
+  const parts=sh.filter(p=>p.kind==='part');
+  const mids=sh.filter(p=>p.kind==='cut-line').sort((a,b)=>a.y-b.y);
+  const bounds=[0,...mids.flatMap(c=>[c.y,c.y+c.h]),SHEET_L];
+  const zoneOf=p=>{
+    for(let z=0;z<=mids.length;z++){
+      const lo=bounds[z*2]??0, hi=bounds[z*2+1]??SHEET_L;
+      if(p.y>=lo-EPS&&p.y+p.h<=hi+EPS) return [z,lo,hi];
+    }
+    return [0,0,SHEET_L];
+  };
+  const ripRuns=new Set(), settings=new Set(); let crossOps=0;
+  for(const p of parts){
+    const [z,lo,hi]=zoneOf(p);
+    if(p.w<SHEET_W-EPS){
+      ripRuns.add(z+'|'+r4(p.x)+'|'+r4(p.w));
+      settings.add(r4(p.w));
+    }
+    if(p.h<hi-lo-EPS){ crossOps++; settings.add(r4(p.h)); }
+  }
+  for(const c of mids) settings.add(r4(c.y));
+  const operations=ripRuns.size+crossOps+mids.length;
+  return {operations,settings};
+}
+
 function layoutMetrics(sheets){
   let partArea=0,keepArea=0,invArea=0,maxInv=0,noMid=0,totalCuts=0,scatter=0;
+  const cutSettings=new Set();
   const mids=[];
   for(const sh of sheets){
     const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
@@ -1229,10 +1259,19 @@ function layoutMetrics(sheets){
     mids.push(hasMid);
     const oversized=prs.some(([,,w,h])=>Math.max(w,h)>CENTER_HI+EPS);
     if(!hasMid&&!oversized) noMid++;
-    totalCuts+=guillotineCuts(prs);
+    const cw=sheetCutWork(sh); totalCuts+=cw.operations;
+    for(const s of cw.settings) cutSettings.add(s);
   }
   const trashArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-keepArea);
-  return {sheets:sheets.length,noMid,cuts:totalCuts,invArea,maxInv,trashArea,mids,scatter};
+  const unusableArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-invArea);
+  return {sheets:sheets.length,noMid,cuts:totalCuts,settings:cutSettings.size,
+          work:totalCuts+cutSettings.size,invArea,maxInv,trashArea,unusableArea,mids,scatter};
+}
+
+function layoutKey(m){
+  return [m.noMid,r4(m.sheets*SHEET_WORK_COST+m.work),m.settings,m.cuts,
+          Math.round(m.unusableArea*100)/100,-Math.round(m.maxInv*100)/100,
+          -Math.round(m.invArea*100)/100,m.scatter,m.sheets];
 }
 
 const sheetUtil=sh=>sh.filter(p=>p.kind==='part').reduce((a,p)=>a+p.w*p.h,0)/(SHEET_W*SHEET_L);
@@ -1286,13 +1325,56 @@ function bestCrosscut(parts,material,omap){
     const placed=sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0);
     if(placed===total){
       const m=layoutMetrics(sheets);
-      const key=[sheets.length,-Math.round(m.maxInv*100)/100,-Math.round(m.invArea*100)/100,Math.abs(y-SHEET_L/2)];
+      const key=[...layoutKey(m),Math.abs(y-SHEET_L/2)];
       if(!best||cmpArr(key,best[0])<0) best=[key,sheets,offs,y];
     }
   }
   return best?[best[1],best[2],best[3]]:null;
 }
 function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[i]??0,y=b[i]??0; if(x!==y) return x<y?-1:1; } return 0; }
+
+/* Independent deterministic passes complement the shape-grouped packers. They place
+   pieces one at a time, may rotate identical pieces differently, and vary ordering,
+   orientation preference, split direction and breakdown position. */
+function searchHash(id,pass){
+  let x=((+id+1)*2654435761)^((pass+1)*2246822519);
+  x^=x>>>16; x=Math.imul(x,3266489917); x^=x>>>13; return x>>>0;
+}
+function searchOrder(parts,pass){
+  const mode=pass%5;
+  return [...parts].sort((a,b)=>{
+    let d=0;
+    if(mode===0) d=b.L*b.S-a.L*a.S;
+    else if(mode===1) d=b.L-a.L;
+    else if(mode===2) d=b.S-a.S;
+    else if(mode===3) d=(b.L+b.S)-(a.L+a.S);
+    if(Math.abs(d)>EPS) return d;
+    return searchHash(a.id,pass)-searchHash(b.id,pass);
+  });
+}
+function packSheetsSearch(parts,material,pass,cutY){
+  let remaining=[...parts]; const sheets=[],offs=[];
+  const forced=cutY!=null&&cutY>=CENTER_LO-EPS&&cutY+KERF<SHEET_L-EPS;
+  let guard=0;
+  while(remaining.length&&guard++<1000){
+    const placements=forced?[{name:'mid-cut-barrier',x:0,y:cutY,w:SHEET_W,h:KERF,kind:'cut-line'}]:[];
+    let free=forced?[[0,0,SHEET_W,cutY],[0,cutY+KERF,SHEET_W,SHEET_L-cutY-KERF]]
+                   :[[0,0,SHEET_W,SHEET_L]];
+    const placed=new Set();
+    for(const p of searchOrder(remaining,pass)){
+      const f=fitRect(free,p.L,p.S,pass%2===1);
+      if(!f) continue;
+      placements.push({name:p.name,id:p.id,x:f.x,y:f.y,w:f.w,h:f.h,kind:'part'});
+      splitRect(free,f,Math.floor(pass/2)%3);
+      free=coalesceRects(free); placed.add(p.id);
+    }
+    if(!placed.size) break;
+    offcutsFromFree(placements,free,material);
+    sheets.push(placements); offs.push(...loggedOffcuts([placements],material));
+    remaining=remaining.filter(p=>!placed.has(p.id));
+  }
+  return [sheets,offs,remaining];
+}
 
 function chooseLayout(parts,material,budget){
   const shapes=[...new Set(parts.map(p=>r4(p.L)+'|'+r4(p.S)))];
@@ -1322,14 +1404,22 @@ function chooseLayout(parts,material,budget){
       cands.push(['grouped+mid [forced-mid]',packGrouped(parts,material,cc[2],omap)[0]]);
     }
   }
+  const passes=budget==='fast'?8:16;
+  const maxCut=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
+  const cutChoices=maxCut>=CENTER_LO-EPS
+    ? [null,CENTER_LO,r4((CENTER_LO+maxCut)/2),maxCut]
+    : [null];
+  for(let pass=0;pass<passes;pass++){
+    const cutY=cutChoices[pass%cutChoices.length];
+    cands.push(['search '+(pass+1)+'/'+passes+(cutY==null?' [natural]':' [mid '+fmt(cutY)+'"]'),
+                packSheetsSearch(parts,material,pass,cutY)[0]]);
+  }
   const total=parts.length;
   const scored=[];
   for(const [name,sheets] of cands){
     if(sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0)!==total) continue;
     const m=layoutMetrics(sheets);
-    const cutscore=m.cuts+SHEET_BREAKDOWN_CUTS*m.sheets+m.scatter*0.1;
-    const key=[0,m.noMid,cutscore,-Math.round(m.maxInv*100)/100,-Math.round(m.invArea*100)/100,Math.round(m.trashArea*100)/100,m.sheets];
-    scored.push([key,name,sheets,m]);
+    scored.push([layoutKey(m),name,sheets,m]);
   }
   if(!scored.length) return null;
   scored.sort((a,b)=>cmpArr(a[0],b[0]));
@@ -1338,10 +1428,10 @@ function chooseLayout(parts,material,budget){
      kerf-adjusted free rectangles, so compaction can rotate individual pieces without
      reconstructing phantom space from their finished outlines. */
   const finals=[];
-  for(const [key,name,sheets,m] of scored.slice(0,8)){
+  for(const [key,name,sheets,m] of scored.slice(0,budget==='fast'?12:24)){
     const c=compactSheets(sheets,material);
     const cm=layoutMetrics(c);
-    finals.push([[cm.sheets,...key.slice(1)],name,c,cm]);
+    finals.push([layoutKey(cm),name,c,cm]);
   }
   finals.sort((a,b)=>cmpArr(a[0],b[0]));
   return {name:finals[0][1],sheets:finals[0][2],metrics:finals[0][3]};
@@ -1365,10 +1455,8 @@ function retightenCuts(sheets,material){
    empties the least-full sheet by dropping its parts into free space on the other
    sheets, trying BOTH orientations per part. Free rects already treat the mid-cut
    as an obstacle, so nothing straddles the breakdown cut. */
-function sheetFreeRects(sh){
-  /* offcutsFromFree records every positive free rectangle, including trash. These
-     are the packer's real disjoint leftovers with all kerfs already removed. */
-  const out=sh.filter(p=>p.kind==='offcut').map(p=>[p.x,p.y,p.w,p.h]);
+function coalesceRects(input){
+  const out=input.map(r=>r.slice());
   /* A guillotine split can leave two touching rectangles even though no kerf runs
      between them. Join exact shared edges only; a real saw gap remains a gap. */
   let joined=true;
@@ -1388,11 +1476,17 @@ function sheetFreeRects(sh){
   }
   return out;
 }
-function fitRect(rects,L,S){
+function sheetFreeRects(sh){
+  /* offcutsFromFree records every positive free rectangle, including trash. These
+     are the packer's real disjoint leftovers with all kerfs already removed. */
+  return coalesceRects(sh.filter(p=>p.kind==='offcut').map(p=>[p.x,p.y,p.w,p.h]));
+}
+function fitRect(rects,L,S,flip){
   let best=null;
   for(let i=0;i<rects.length;i++){
     const [rx,ry,rw,rh]=rects[i];
-    for(const [w,h] of [[L,S],[S,L]]){
+    const opts=flip?[[S,L],[L,S]]:[[L,S],[S,L]];
+    for(const [w,h] of opts){
       if(w<=rw+EPS&&h<=rh+EPS){
         const waste=rw*rh-w*h;
         if(!best||waste<best.waste) best={waste,i,x:rx,y:ry,w,h,rx,ry,rw,rh};
@@ -1407,15 +1501,16 @@ function fitRect(rects,L,S){
    inches and the cut plan looked fine. One of the two edges has to give way, which is
    what a guillotine cut actually does: the split runs either across or down, not both.
    Split along whichever leaves the larger single piece. */
-function splitRect(rects,f){
+function splitRect(rects,f,mode){
   rects.splice(f.i,1);
   const occW=Math.min(f.w+KERF,f.rw), occH=Math.min(f.h+KERF,f.rh);
   const restW=f.rw-occW, restH=f.rh-occH;
-  const cands=(restW*f.rh>=restH*f.rw)
+  const down=mode===1?true:mode===2?false:(restW*f.rh>=restH*f.rw);
+  const cands=down
     ? [[f.rx+occW,f.ry,restW,f.rh],[f.rx,f.ry+occH,occW,restH]]   // cut down the right
     : [[f.rx+occW,f.ry,restW,occH],[f.rx,f.ry+occH,f.rw,restH]];  // cut across the bottom
   for(const [x,y,w,h] of cands)
-    if(w>=MIN_SCRAP_DIM-EPS&&h>=MIN_SCRAP_DIM-EPS) rects.push([x,y,w,h]);
+    if(w>EPS&&h>EPS) rects.push([x,y,w,h]);
 }
 function compactSheets(sheets,material){
   let work=sheets.map(s=>s.map(p=>({...p})));
@@ -1485,7 +1580,9 @@ function packMaterial(material,matParts,stockOffcuts,budget){
     const res=chooseLayout(remaining,material,budget);
     if(res){
       strategy=res.name;
-      sheets=retightenCuts(res.sheets,material);
+      const tightened=retightenCuts(res.sheets,material);
+      sheets=cmpArr(layoutKey(layoutMetrics(tightened)),layoutKey(layoutMetrics(res.sheets)))<=0
+        ? tightened : res.sheets;
       for(const sh of sheets){
         if(!sh.some(p=>p.kind==='cut-line')){
           const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
@@ -3723,10 +3820,10 @@ function viewMap(body,sum,g){
       :'');
   let h='';
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Cuts</th><th>Strategy</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Cuts / settings</th><th>Strategy</th></tr></thead><tbody>';
     for(const m of N.materials)
       h+='<tr><td>'+m.material+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
-        '</td><td class="n">'+(m.metrics?m.metrics.cuts:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
+        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.settings:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
     h+='</tbody></table></div>';
     h+='<div class="legend" style="margin-top:14px"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>offcut, keep &amp; log</span>'+
       '<span><i style="background:#ececec;border-color:#b0b0b0"></i>scrap</span>'+
@@ -4196,14 +4293,16 @@ function buildEstimate(R){
   addHw('Shelf pins',c.shelf,est.hw.pin);
   const primerGal=F.fin_primer_cov>0?area*primerCoats/F.fin_primer_cov:0;
   const paintGal=F.fin_paint_cov>0?area*paintCoats/F.fin_paint_cov:0;
-  /* rawQty is the unrounded need. The shopping list has to buy whole gallons off this,
-     not off a figure already rounded to two decimals — 1.004 gallons must buy two. */
+  const primerBuy=Math.ceil(primerGal-1e-9), paintBuy=Math.ceil(paintGal-1e-9);
+  /* Finish is purchased by the whole gallon, so both the estimate and shopping list
+     charge the container that must be bought. rawQty keeps the coverage requirement
+     for the shopping note; 1.004 gallons still correctly buys two. */
   if(primerGal>0) hwRows.push({name:'Primer · '+primerCoats+' coat'+(primerCoats>1?'s':''),
-    qty:primerGal.toFixed(2)+' gal',rawQty:primerGal,
-    price:F.fin_primer_price,cost:primerGal*F.fin_primer_price});
+    qty:primerBuy+' gal',rawQty:primerGal,
+    price:F.fin_primer_price,cost:primerBuy*F.fin_primer_price});
   if(paintGal>0) hwRows.push({name:'Paint · '+paintCoats+' coat'+(paintCoats>1?'s':''),
-    qty:paintGal.toFixed(2)+' gal',rawQty:paintGal,
-    price:F.fin_paint_price,cost:paintGal*F.fin_paint_price});
+    qty:paintBuy+' gal',rawQty:paintGal,
+    price:F.fin_paint_price,cost:paintBuy*F.fin_paint_price});
   const hwCost=hwRows.reduce((a,r)=>a+r.cost,0);
 
   const direct=labor+matCost+hwCost;
