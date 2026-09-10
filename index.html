@@ -426,7 +426,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump the last number by 1 on every change that ships (v1.10, v1.11, v1.12, ...). -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.11</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.12</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -840,7 +840,7 @@ body.printing .wrap{padding-bottom:120px}
     <li>Length is always the longer dimension, width the shorter.</li>
     <li>Widths round to 1/8"; leftover becomes even scribe gaps at both walls.</li>
     <li>Every full sheet gets one breakdown crosscut between 36" and 60". A part longer than a half sheet (toe kick rails, long runners) is ripped off the whole sheet first, and the rest of that sheet is broken down after.</li>
-    <li>Sheet layouts come from the Plywood Cut Optimizer v2 search. It tests both grouped and independent part placement, then chooses by actual scrap, cut count, fence changes, and reusable offcuts. Fewest sheets comes first: a sheet is only added when no layout at the lower count can be found.</li>
+    <li>Sheet layouts come from the Plywood Cut Optimizer v2 search. Identical parts are internally grouped to reuse fence settings, but the cut map leaves those working groups unmarked. Fewest sheets comes first: a sheet is only added when no layout at the lower count can be found.</li>
     <li>Offcuts 6" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
     <li>Drawer boxes: sides run the full depth, front and back dadoed into each side, bottom in a dado all round. Stock thicknesses come from the Plywood &amp; saw actuals.</li>
     <li>Box depth takes the back-panel offset off the cabinet depth, then rounds down to the longest slide on hand. Overlay fronts on a face frame gain the frame thickness back.</li>
@@ -988,8 +988,9 @@ function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
 function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[i]??0,y=b[i]??0; if(x!==y) return x<y?-1:1; } return 0; }
 
 /* ================= sheet nesting: Plywood Cut Optimizer v2 =================
-   The sheet cut maps are built by the v2 optimizer's engine. Trials test both
-   kerf-tight groups and independent pieces, every sheet gets its 36"-60"
+   The sheet cut maps are built by the v2 optimizer's engine, carried over as-is:
+   identical parts are packed as kerf-tight batches (grids and shared-width strips) cut
+   from one parent blank with repeated fence settings, every sheet gets its 36"-60"
    breakdown crosscut, and thousands of seeded trials are pooled and the "Balanced"
    layout is taken. Lines marked [index] are the only departures from v2: the sheet
    size is the material's own (SHEET_W x SHEET_L), a part longer than a half sheet
@@ -1878,15 +1879,13 @@ const CUTOPT=(()=>{
   /* ----------------------------------------------------------------- pools */
 
   function dominates(a, b) {
-    /* Judge layouts only by results that matter at the saw. Internal grouping is
-       allowed to help, but it no longer earns a score bonus of its own. */
-    const av = [a.wasteArea, a.cutCount, a.fenceChanges, a.offcutCount, -a.largestOffcut, -a.longestOffcutSide];
-    const bv = [b.wasteArea, b.cutCount, b.fenceChanges, b.offcutCount, -b.largestOffcut, -b.longestOffcutSide];
+    const av = [a.wasteArea, a.cutCount, a.fenceChanges, a.unmatchedParts, a.typeSpread, a.offcutCount, -a.largestOffcut];
+    const bv = [b.wasteArea, b.cutCount, b.fenceChanges, b.unmatchedParts, b.typeSpread, b.offcutCount, -b.largestOffcut];
     return av.every((v, i) => v <= bv[i] + EPS) && av.some((v, i) => v < bv[i] - EPS);
   }
 
   function balancedRaw(c) {
-    return c.wasteArea * .08 + c.cutCount * 2 + c.fenceChanges * 8 + c.offcutCount * 3 - c.longestOffcutSide * .12 - c.largestOffcut * .003;
+    return c.wasteArea * .08 + c.cutCount * 2 + c.fenceChanges * 8 + c.unmatchedParts * 5 + c.typeSpread * 6 + c.offcutCount * 3 - c.repeatedSheets * 14 - c.longestOffcutSide * .12 - c.largestOffcut * .003;
   }
 
   function addToPool(pool, candidate) {
@@ -1928,13 +1927,18 @@ const CUTOPT=(()=>{
         x.candidate.sheets.length === candidate.sheets.length)) return;
       out.push({label, candidate, note});
     };
-    const balanced = normalizedBest(minPool, ['wasteArea', 'cutCount', 'fenceChanges', 'offcutCount', c => -c.largestOffcut, c => -c.longestOffcutSide]);
-    push('Balanced', balanced, 'Minimum-sheet compromise');
+    const balanced = normalizedBest(minPool, ['wasteArea', 'cutCount', 'fenceChanges', 'unmatchedParts', 'typeSpread', 'offcutCount', c => -c.largestOffcut, c => -c.repeatedSheets, c => -c.longestOffcutSide]);
+    push(balanced.unmatchedParts === 0 ? 'Balanced · fully batched' : 'Balanced', balanced, 'Minimum-sheet compromise');
+    push('Grouped by part', [...minPool].sort((a, b) =>
+      a.typeSpread - b.typeSpread || a.unmatchedParts - b.unmatchedParts || a.cutCount - b.cutCount)[0], 'Each part type kept on as few sheets as possible');
     push('Repeat sheets', [...minPool].sort((a, b) =>
       b.repeatedSheets - a.repeatedSheets || a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Identical sheets cut from one setup');
     push('Least scrap', [...minPool].sort((a, b) => a.wasteArea - b.wasteArea || a.timeSeconds - b.timeSeconds)[0], 'Lowest unusable waste');
     push('Fewest cuts', [...minPool].sort((a, b) => a.cutCount - b.cutCount || a.fenceChanges - b.fenceChanges)[0], 'Shortest cut count');
     push('Fewest changes', [...minPool].sort((a, b) => a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Most repeated settings');
+    push('Biggest batches', [...minPool].sort((a, b) =>
+      a.unmatchedParts - b.unmatchedParts || b.largestBatch - a.largestBatch ||
+      b.averageBatch - a.averageBatch || a.cutCount - b.cutCount)[0], 'Longest common cutting runs');
     push('Best offcuts', [...minPool].sort((a, b) => a.offcutCount - b.offcutCount || b.largestOffcut - a.largestOffcut || a.wasteArea - b.wasteArea)[0], 'Consolidated remnants');
     if (extraPool.length) {
       const fastest = [...extraPool].sort((a, b) => a.timeSeconds - b.timeSeconds || a.wasteArea - b.wasteArea)[0];
@@ -2114,17 +2118,18 @@ const CUTOPT=(()=>{
     const rng = makeRng(13579);
     let pool = [];
     let sheetCount = minimum;
-    /* Search grouped and independent placements at every sheet count. Independent
-       trials keep a convenient manufacturing group from blocking a tighter layout;
-       grouped trials remain available when they truly lower cuts or fence changes. */
+    /* v2's search: `trials` at the area minimum, then the extra-sheet pass. The area bound
+       is not always reachable, so keep adding a sheet until a layout is found.
+       [index] Fewer sheets come first: before a sheet is added, the same count is
+       searched again with loose trials, which find tight layouts that v2's run-first
+       trials rarely reach. */
     for (; sheetCount <= minimum + 4; sheetCount++) {
       const first = sheetCount === minimum;
       const n = first ? trials : Math.max(500, Math.ceil(trials * .35));
-      for (let trial = 0; trial < n; trial++) {
-        /* One trial in three starts with independent pieces. This broadens the search
-           without increasing the existing trial count or slowing every optimization. */
-        const loose = trial % 3 === 2;
-        pool = addToPool(pool, buildTrial(v2parts, sheetCount, firstOptions, rng, trial, 12, 45, first ? 6 : 2, openCount, loose));
+      for (const loose of [false, true]) {
+        for (let trial = 0; trial < n; trial++)
+          pool = addToPool(pool, buildTrial(v2parts, sheetCount, firstOptions, rng, trial, 12, 45, first ? 6 : 2, openCount, loose));
+        if (pool.length) break;
       }
       if (pool.length) break;
     }
