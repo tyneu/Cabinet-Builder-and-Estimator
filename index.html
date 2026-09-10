@@ -426,7 +426,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump the last number on every change that ships. -->
-<header><h1>Cabinet Planner</h1><span class="ver">V1.8</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">V1.9</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -840,7 +840,7 @@ body.printing .wrap{padding-bottom:120px}
     <li>Length is always the longer dimension, width the shorter.</li>
     <li>Widths round to 1/8"; leftover becomes even scribe gaps at both walls.</li>
     <li>Every full sheet gets one breakdown crosscut between 36" and 60". A part longer than a half sheet (toe kick rails, long runners) is ripped off the whole sheet first, and the rest of that sheet is broken down after.</li>
-    <li>Sheet layouts come from the Plywood Cut Optimizer v2 search: identical parts are cut as batches from one parent blank with repeated fence settings, and the balanced layout is used.</li>
+    <li>Sheet layouts come from the Plywood Cut Optimizer v2 search: identical parts are cut as batches from one parent blank with repeated fence settings, and the balanced layout is used. Fewest sheets comes first: a sheet is only added when no layout at the lower count can be found.</li>
     <li>Offcuts 6" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
     <li>Drawer boxes: sides run the full depth, front and back dadoed into each side, bottom in a dado all round. Stock thicknesses come from the Plywood &amp; saw actuals.</li>
     <li>Box depth takes the back-panel offset off the cabinet depth, then rounds down to the longest slide on hand. Overlay fronts on a face frame gain the frame thickness back.</li>
@@ -999,8 +999,9 @@ function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[
    size is the material's own (SHEET_W x SHEET_L), a part longer than a half sheet
    is ripped off a whole sheet before that sheet's breakdown cut, a run is cut at the
    piece size with the last piece cut freeing the leftover (EDGE_CUTS; v2 sets the
-   fence to the whole blank first), and a regroup pass puts a lone piece back with its
-   own run where a sheet has room. Rack offcuts and boards still use the column packer
+   fence to the whole blank first), a sheet count that v2's trials miss is searched
+   again with loose trials before a sheet is added (fewest sheets first), and a
+   regroup pass puts a lone piece back with its own run where a sheet has room. Rack offcuts and boards still use the column packer
    above. */
 /* Search depth. A trial costs roughly the square of the part count, so small materials
    get v2 "Standard" (4000 trials) and big ones taper to v2 "Quick" (1200). Too shallow
@@ -1071,7 +1072,10 @@ const CUTOPT=(()=>{
     return sizes;
   }
 
-  function makeBatchPlan(parts, trial, rng) {
+  /* [index] `loose` starts every piece on its own, with no strips. A trial built from
+     big runs is boxed in early and often misses the fewest-sheets layout; loose
+     trials find it far more often, and the regroup pass rebuilds runs afterwards. */
+  function makeBatchPlan(parts, trial, rng, loose = false) {
     const groups = new Map();
     parts.forEach(p => {
       if (!groups.has(p.typeIndex)) groups.set(p.typeIndex, []);
@@ -1081,7 +1085,7 @@ const CUTOPT=(()=>{
     let nextId = 1;
     /* Shop practice: parts that share a rip width come off one strip, even
        when they are different parts. Try that on half the trials. */
-    const stripTrial = trial % 2 === 0;
+    const stripTrial = !loose && trial % 2 === 0;
     const maxStrip = [59.875, 48, 40, 59.875][trial % 4];
     if (stripTrial) {
       const byWidth = new Map();
@@ -1114,7 +1118,7 @@ const CUTOPT=(()=>{
     groups.forEach(group => {
       if (!group.length) return;
       const type = group[0];
-      const maxSize = SIZE_MENU[(trial + type.typeIndex * 3) % SIZE_MENU.length];
+      const maxSize = loose ? 1 : SIZE_MENU[(trial + type.typeIndex * 3) % SIZE_MENU.length];
       const even = ((trial + type.typeIndex) % 2) === 0;
       const sizes = chunkQuantity(group.length, maxSize, even);
       let cursor = 0;
@@ -1746,7 +1750,7 @@ const CUTOPT=(()=>{
     return layout;
   }
 
-  function buildTrial(parts, sheetCount, firstOptions, rng, trial, cutSeconds, changeSeconds, scheduleAttempts = 6, openCount = 0) {
+  function buildTrial(parts, sheetCount, firstOptions, rng, trial, cutSeconds, changeSeconds, scheduleAttempts = 6, openCount = 0, loose = false) {
     const firstCuts = [];
     /* A shared first cut across every sheet keeps the breakdown in one fence
        run, so try that on most trials and mixed settings on the rest. */
@@ -1760,7 +1764,7 @@ const CUTOPT=(()=>{
     }
     /* Larger runs first; attemptPack splits a run only when the space left
        cannot take it whole, so batching never costs a sheet. */
-    let plan = makeBatchPlan(parts, trial, rng);
+    let plan = makeBatchPlan(parts, trial, rng, loose);
     const twin = trial % 3 !== 1;
     let layout = attemptPack(orderItems(plan, rng, trial), sheetCount, firstCuts, rng, twin, openCount);
     if (!layout) {
@@ -2118,12 +2122,18 @@ const CUTOPT=(()=>{
     let pool = [];
     let sheetCount = minimum;
     /* v2's search: `trials` at the area minimum, then the extra-sheet pass. The area bound
-       is not always reachable, so keep adding a sheet until a layout is found. */
+       is not always reachable, so keep adding a sheet until a layout is found.
+       [index] Fewer sheets come first: before a sheet is added, the same count is
+       searched again with loose trials, which find tight layouts that v2's run-first
+       trials rarely reach. */
     for (; sheetCount <= minimum + 4; sheetCount++) {
       const first = sheetCount === minimum;
       const n = first ? trials : Math.max(500, Math.ceil(trials * .35));
-      for (let trial = 0; trial < n; trial++)
-        pool = addToPool(pool, buildTrial(v2parts, sheetCount, firstOptions, rng, trial, 12, 45, first ? 6 : 2, openCount));
+      for (const loose of [false, true]) {
+        for (let trial = 0; trial < n; trial++)
+          pool = addToPool(pool, buildTrial(v2parts, sheetCount, firstOptions, rng, trial, 12, 45, first ? 6 : 2, openCount, loose));
+        if (pool.length) break;
+      }
       if (pool.length) break;
     }
     const pick = pool.length ? uniqueCandidates(pool, [], 0).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
