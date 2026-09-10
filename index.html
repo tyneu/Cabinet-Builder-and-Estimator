@@ -837,7 +837,8 @@ body.printing .wrap{padding-bottom:120px}
     <li>A lower shelf is set back 1 1/4" when there's a back panel, or 1/4" when there isn't.</li>
     <li>Length is always the longer dimension, width the shorter.</li>
     <li>Widths round to 1/8"; leftover becomes even scribe gaps at both walls.</li>
-    <li>Every full sheet gets one breakdown crosscut between 36" and 60".</li>
+    <li>Every full sheet gets one breakdown crosscut between 36" and 60". A part longer than a half sheet (toe kick rails, long runners) is ripped off the whole sheet first, and the rest of that sheet is broken down after.</li>
+    <li>Sheet layouts come from the Plywood Cut Optimizer v2 search: identical parts are cut as batches from one parent blank with repeated fence settings, and the balanced layout is used.</li>
     <li>Offcuts 6" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
     <li>Drawer boxes: sides run the full depth, front and back dadoed into each side, bottom in a dado all round. Stock thicknesses come from the Plywood &amp; saw actuals.</li>
     <li>Box depth takes the back-panel offset off the cabinet depth, then rounds down to the longest slide on hand. Overlay fronts on a face frame gain the frame thickness back.</li>
@@ -879,13 +880,10 @@ let KERF=0.125;
 /* The sheet being nested. Set per material before packing it, the same way KERF is,
    so a sheet that really is 49 x 97 nests as 49 x 97 rather than as a nominal 4x8. */
 let SHEET_W=48, SHEET_L=96;
-const EPS=1e-9, RND=4;
+const EPS=1e-9;
 const CENTER_LO=36, CENTER_HI=60;
 const TRASH_MIN_DIM=3, TRASH_MIN_AREA=72;
 const STORE_MIN_DIM=6, STORE_MIN_AREA=144;
-const MIN_SCRAP_DIM=TRASH_MIN_DIM;
-const FULL_UTIL=0.60, SHEET_BREAKDOWN_CUTS=2;
-const SHEET_WORK_COST=10;             // one sheet ~= 5 new settings or 10 repeated cuts
 const r4=v=>Math.round(v*1e6)/1e6;   // 1/32 and 1/64 need more than 4 places
 
 function orient(L,S,bw,bl,mode,noRotate){
@@ -930,106 +928,11 @@ function columnsForBin(parts,bw,bl,omap){
 }
 const colH=c=>c.parts.length*c.ell+(c.parts.length-1)*KERF;
 
-function freeRects(placements,bw,bl){
-  const obs=placements.filter(p=>p.kind==='part'||p.kind==='cut-line').map(p=>[p.x,p.y,p.w,p.h]);
-  const xs=[...new Set([0,bw,...obs.map(o=>o[0]),...obs.map(o=>o[0]+o[2])])].sort((a,b)=>a-b);
-  const ys=[...new Set([0,bl,...obs.map(o=>o[1]),...obs.map(o=>o[1]+o[3])])].sort((a,b)=>a-b);
-  const nc=xs.length-1, nr=ys.length-1;
-  if(nc<1||nr<1) return [];
-  const occ=(c,r)=>{
-    const cx=(xs[c]+xs[c+1])/2, cy=(ys[r]+ys[r+1])/2;
-    for(const [ox,oy,ow,oh] of obs)
-      if(ox-EPS<cx&&cx<ox+ow+EPS&&oy-EPS<cy&&cy<oy+oh+EPS) return true;
-    return false;
-  };
-  const free=[]; for(let r=0;r<nr;r++){const row=[];for(let c=0;c<nc;c++)row.push(!occ(c,r));free.push(row);}
-  const rects=[];
-  for(;;){
-    let best=null;
-    for(let c0=0;c0<nc;c0++) for(let c1=c0;c1<nc;c1++){
-      const width=xs[c1+1]-xs[c0];
-      if(width<MIN_SCRAP_DIM-EPS) continue;
-      let r=0;
-      while(r<nr){
-        let ok=true; for(let c=c0;c<=c1;c++) if(!free[r][c]){ok=false;break;}
-        if(ok){
-          const r0=r;
-          while(r<nr){let o2=true;for(let c=c0;c<=c1;c++) if(!free[r][c]){o2=false;break;} if(!o2)break; r++;}
-          const height=ys[r]-ys[r0];
-          if(height>=MIN_SCRAP_DIM-EPS){
-            const area=width*height;
-            if(!best||area>best[0]) best=[area,c0,c1,r0,r-1];
-          }
-        } else r++;
-      }
-    }
-    if(!best) break;
-    const [,c0,c1,r0,r1]=best;
-    rects.push([xs[c0],ys[r0],xs[c1+1]-xs[c0],ys[r1+1]-ys[r0]]);
-    for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++) free[r][c]=false;
-  }
-  return rects;
-}
-
 function tier(w,h){
   const lo=Math.min(w,h), area=w*h;
   if(lo<TRASH_MIN_DIM-EPS||area<TRASH_MIN_AREA-EPS) return 'trash';
   if(lo<STORE_MIN_DIM-EPS||area<STORE_MIN_AREA-EPS) return 'keep';
   return 'inventory';
-}
-
-function centerCut(rects,stockL=SHEET_L){
-  if(!rects.length) return null;
-  if(stockL<=CENTER_HI+EPS) return null;
-  const partEdges=new Set();
-  for(const [x,y,w,h] of rects){
-    partEdges.add(y+h);                 // put the kerf after a part
-    if(y>=KERF-EPS) partEdges.add(y-KERF); // or immediately before the next one
-  }
-  const edgeKeys=new Set([...partEdges].map(r4));
-  const cand=new Set([...partEdges, stockL/2, CENTER_LO, CENTER_HI]);
-  for(let i=CENTER_LO*8;i<=Math.min(CENTER_HI,stockL)*8;i++) cand.add(i/8);
-  const valid=[];
-  for(const y0 of cand){
-    if(y0<=EPS||y0+KERF>=stockL-EPS) continue;
-    if(rects.some(([x,y,w,h])=>y<y0+KERF-EPS&&y0<y+h-EPS)) continue;
-    const topParts=rects.filter(r=>r[1]+r[3]<=y0+EPS);
-    const botParts=rects.filter(r=>r[1]>=y0+KERF-EPS);
-    const topOk=(y0<=60+EPS)||!topParts.length;
-    const botOk=((stockL-y0-KERF)<=60+EPS)||!botParts.length;
-    if(topOk&&botOk) valid.push(y0);
-  }
-  if(!valid.length) return null;
-  const maxEmpty=y=>{
-    const t=!rects.some(r=>r[1]+r[3]<=y+EPS)?y:0;
-    const b=!rects.some(r=>r[1]>=y+KERF-EPS)?(stockL-y-KERF):0;
-    return Math.max(t,b);
-  };
-  valid.sort((a,b)=>{
-    const ae=edgeKeys.has(r4(a))?0:1, be=edgeKeys.has(r4(b))?0:1;
-    if(ae!==be) return ae-be;
-    const ac=Math.abs(a-stockL/2), bc=Math.abs(b-stockL/2);
-    if(Math.abs(ac-bc)>EPS) return ac-bc;
-    return maxEmpty(b)-maxEmpty(a);
-  });
-  return valid[0];
-}
-
-function addOffcuts(placements,bw,bl,material,cutY,noMid,tierFn){
-  const dummy=[...placements];
-  const obs=dummy.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-  if(cutY==null) cutY=centerCut(obs,bl);
-  if(cutY!=null&&!noMid){
-    const barrier={name:'mid-cut-barrier',x:0,y:cutY,w:bw,h:KERF,kind:'cut-line'};
-    dummy.push(barrier); placements.push(barrier);
-  }
-  const offs=[];
-  for(const [x,y,w,l] of freeRects(dummy,bw,bl)){
-    const t=(tierFn||tier)(w,l);
-    placements.push({name:'',x,y,w,h:l,kind:'offcut',tier:t});
-    if(t==='inventory') offs.push({material,l:Math.max(w,l),w:Math.min(w,l)});
-  }
-  return [placements,offs];
 }
 
 /* The column packer already owns the real, disjoint leftovers and has removed every
@@ -1044,24 +947,6 @@ function offcutsFromFree(placements,free,material,tierFn){
     if(t==='inventory') offs.push({material,l:r4(Math.max(w,h)),w:r4(Math.min(w,h))});
   }
   return [placements,offs];
-}
-
-/* A later breakdown cut can cross an existing free rectangle. Split that rectangle
-   at the full kerf so the map and every banked remnant still match the stock. */
-function applyMidCut(sh,cutY,material){
-  const out=[];
-  for(const p of sh){
-    if(p.kind!=='offcut'){ out.push(p); continue; }
-    const end=p.y+p.h, cutEnd=cutY+KERF;
-    if(end<=cutY+EPS||p.y>=cutEnd-EPS){ out.push(p); continue; }
-    const top=Math.max(0,cutY-p.y), bot=Math.max(0,end-cutEnd);
-    for(const [y,h] of [[p.y,top],[cutEnd,bot]]) if(h>EPS){
-      const t=tier(p.w,h);
-      out.push({...p,y,h,tier:t});
-    }
-  }
-  out.push({name:'mid-cut-barrier',x:0,y:cutY,w:SHEET_W,h:KERF,kind:'cut-line'});
-  return out;
 }
 
 function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
@@ -1101,544 +986,992 @@ function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
   return [placements,placedCols,leftover,free];
 }
 
-function packOneSheetDynamic(parts,material,omap){
-  let best=null;
-  const maxY=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
-  for(let yi=CENTER_LO*16;yi<=maxY*16;yi+=8){
-    const y=yi/16, topH=y, botY=y+KERF, botH=SHEET_L-botY;
-    const cols=columnsForBin(parts,SHEET_W,Math.max(topH,botH),omap);
-    if(!cols.length) continue;
-    const freeInit=[[0,0,SHEET_W,topH],[0,botY,SHEET_W,botH]];
-    let [pl,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,y);
-    if(!placedCols.length) continue;
-    const placedCount=placedCols.reduce((a,[c])=>a+c.parts.length,0);
-    const [plo,of]=offcutsFromFree(pl,free,material);
-    const invs=plo.filter(p=>p.kind==='offcut'&&p.tier==='inventory').map(p=>p.w*p.h);
-    const maxInv=invs.length?Math.max(...invs):0;
-    const invArea=invs.reduce((a,b)=>a+b,0);
-    const key=[placedCount,maxInv,invArea];
-    if(!best||key[0]>best[0][0]||(key[0]===best[0][0]&&(key[1]>best[0][1]||(key[1]===best[0][1]&&key[2]>best[0][2])))){
-      const ids=new Set(placedCols.flatMap(([c])=>c.parts.map(p=>p.id)));
-      best=[key,plo,of,parts.filter(p=>!ids.has(p.id))];
-    }
-  }
-  return best;
-}
-
-function packSheetsDynamic(parts,material,omap){
-  let remaining=parts; const sheets=[],offs=[];
-  let guard=0;
-  while(remaining.length){
-    if(++guard>1000) break;
-    const res=packOneSheetDynamic(remaining,material,omap);
-    if(!res) break;
-    sheets.push(res[1]); offs.push(...res[2]); remaining=res[3];
-  }
-  return [sheets,offs];
-}
-
-function packSheets(parts,material,omap){
-  let remaining=parts; const sheets=[],offs=[];
-  let guard=0;
-  while(remaining.length){
-    if(++guard>10000) break;
-    const cols=columnsForBin(remaining,SHEET_W,SHEET_L,omap);
-    if(!cols.length) break;
-    let [placements,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,null,null);
-    if(!placedCols.length) break;
-    const [pl,of]=offcutsFromFree(placements,free,material);
-    sheets.push(pl); offs.push(...of);
-    const ids=new Set(placedCols.flatMap(([c])=>c.parts.map(p=>p.id)));
-    remaining=remaining.filter(p=>!ids.has(p.id));
-  }
-  return [sheets,offs];
-}
-
-function packSheetsCrosscut(parts,material,cutY,omap){
-  const topH=cutY, botY=cutY+KERF, botH=SHEET_L-botY;
-  let remaining=parts; const sheets=[],offs=[];
-  let guard=0;
-  while(remaining.length){
-    if(++guard>10000) break;
-    const cols=columnsForBin(remaining,SHEET_W,Math.max(topH,botH),omap);
-    if(!cols.length) break;
-    const freeInit=[[0,0,SHEET_W,topH],[0,botY,SHEET_W,botH]];
-    let [placements,placedCols,,free]=guillotineColumns(cols,SHEET_W,SHEET_L,material,freeInit,cutY);
-    if(!placedCols.length) break;
-    const [pl,of]=offcutsFromFree(placements,free,material);
-    sheets.push(pl); offs.push(...of);
-    const ids=new Set(placedCols.flatMap(([c])=>c.parts.map(p=>p.id)));
-    remaining=remaining.filter(p=>!ids.has(p.id));
-  }
-  return [sheets,offs];
-}
-
-function guillotineCuts(rects){
-  const n=rects.length;
-  if(n<=1) return 0;
-  if(n>16) return n-1;
-  const items=rects.map(r=>[r[0],r[1],r[0]+r[2],r[1]+r[3]]);
-  const memo=new Map();
-  function solve(idxs){
-    if(idxs.length<=1) return 0;
-    const k=idxs.join(',');
-    if(memo.has(k)) return memo.get(k);
-    const rs=idxs.map(i=>items[i]);
-    const x0=Math.min(...rs.map(r=>r[0])), x1=Math.max(...rs.map(r=>r[2]));
-    const y0=Math.min(...rs.map(r=>r[1])), y1=Math.max(...rs.map(r=>r[3]));
-    let best=null;
-    for(const xc of [...new Set([...rs.map(r=>r[0]),...rs.map(r=>r[2])])].sort((a,b)=>a-b)){
-      if(x0+EPS<xc&&xc<x1-EPS){
-        const a=idxs.filter(i=>items[i][2]<=xc+EPS), b=idxs.filter(i=>items[i][0]>=xc-EPS);
-        if(a.length&&b.length&&a.length+b.length===idxs.length){
-          const c=1+solve(a)+solve(b);
-          best=best==null?c:Math.min(best,c);
-        }
-      }
-    }
-    for(const yc of [...new Set([...rs.map(r=>r[1]),...rs.map(r=>r[3])])].sort((a,b)=>a-b)){
-      if(y0+EPS<yc&&yc<y1-EPS){
-        const a=idxs.filter(i=>items[i][3]<=yc+EPS), b=idxs.filter(i=>items[i][1]>=yc-EPS);
-        if(a.length&&b.length&&a.length+b.length===idxs.length){
-          const c=1+solve(a)+solve(b);
-          best=best==null?c:Math.min(best,c);
-        }
-      }
-    }
-    if(best==null) best=idxs.length-1;
-    memo.set(k,best);
-    return best;
-  }
-  return solve([...Array(n).keys()]);
-}
-
-/* Build a feasible guillotine sequence from the printed layout. A cut is counted
-   once when it separates two sub-panels; aligned pieces can therefore share the cut
-   before being ripped apart. Settings include direction as well as dimension, so a
-   21 3/8 crosscut and a 21 3/8 rip are not incorrectly treated as one setup. */
-function cutPlan(parts,region){
-  if(!parts.length) return {operations:0,settings:new Set()};
-  const memo=new Map();
-  const pIndex=new Map(parts.map((p,i)=>[p,i]));
-  const sk=(axis,n)=>axis+'|'+r4(n);
-  const merge=(a,b,extra)=>{
-    const settings=new Set([...a.settings,...b.settings]);
-    if(extra) settings.add(extra);
-    return {operations:a.operations+b.operations+(extra?1:0),settings};
-  };
-  const cmp=(a,b)=>{
-    const ak=[a.operations+a.settings.size,a.settings.size,a.operations];
-    const bk=[b.operations+b.settings.size,b.settings.size,b.operations];
-    return cmpArr(ak,bk);
-  };
-  function solve(ps,box){
-    const x0=Math.min(...ps.map(p=>p.x)), y0=Math.min(...ps.map(p=>p.y));
-    const x1=Math.max(...ps.map(p=>p.x+p.w)), y1=Math.max(...ps.map(p=>p.y+p.h));
-    const key=ps.map(p=>pIndex.get(p)).sort((a,b)=>a-b).join(',')+
-      '|'+[...box,x0,y0,x1,y1].map(r4).join(',');
-    if(memo.has(key)) return memo.get(key);
-    let trimOps=0; const trimSettings=new Set();
-    if(x0>box[0]+EPS){ trimOps++; trimSettings.add(sk('rip',x1-x0)); }
-    if(x1<box[2]-EPS){ trimOps++; trimSettings.add(sk('rip',x1-x0)); }
-    if(y0>box[1]+EPS){ trimOps++; trimSettings.add(sk('cross',y1-y0)); }
-    if(y1<box[3]-EPS){ trimOps++; trimSettings.add(sk('cross',y1-y0)); }
-    if(ps.length===1){
-      const out={operations:trimOps,settings:trimSettings}; memo.set(key,out); return out;
-    }
-    const candidates=[];
-    const rights=[...new Set(ps.map(p=>r4(p.x+p.w)))].sort((a,b)=>a-b);
-    for(const edge of rights){
-      const left=ps.filter(p=>p.x+p.w<=edge+EPS), right=ps.filter(p=>p.x+p.w>edge+EPS);
-      if(!left.length||!right.length) continue;
-      const next=Math.min(...right.map(p=>p.x));
-      if(next<edge-EPS) continue;
-      const a=solve(left,[x0,y0,edge,y1]), b=solve(right,[next,y0,x1,y1]);
-      for(const dim of [edge-x0,x1-next]) candidates.push(merge(a,b,sk('rip',dim)));
-    }
-    const bottoms=[...new Set(ps.map(p=>r4(p.y+p.h)))].sort((a,b)=>a-b);
-    for(const edge of bottoms){
-      const top=ps.filter(p=>p.y+p.h<=edge+EPS), bottom=ps.filter(p=>p.y+p.h>edge+EPS);
-      if(!top.length||!bottom.length) continue;
-      const next=Math.min(...bottom.map(p=>p.y));
-      if(next<edge-EPS) continue;
-      const a=solve(top,[x0,y0,x1,edge]), b=solve(bottom,[x0,next,x1,y1]);
-      for(const dim of [edge-y0,y1-next]) candidates.push(merge(a,b,sk('cross',dim)));
-    }
-    let core;
-    if(candidates.length) core=candidates.sort(cmp)[0];
-    else{
-      /* Defensive fallback for a non-slicing placement. It is intentionally
-         conservative: every part gets one length and one width pass. */
-      const settings=new Set();
-      for(const p of ps){ settings.add(sk('rip',p.w)); settings.add(sk('cross',p.h)); }
-      core={operations:ps.length*2,settings};
-    }
-    const out={operations:trimOps+core.operations,
-               settings:new Set([...trimSettings,...core.settings])};
-    memo.set(key,out); return out;
-  }
-  return solve(parts,region);
-}
-
-const CUT_WORK_CACHE=new Map();
-function sheetCutWork(sh){
-  const cacheKey=SHEET_W+'|'+SHEET_L+'|'+KERF+'|'+sh.filter(p=>p.kind==='part'||p.kind==='cut-line')
-    .map(p=>[p.kind,p.id??'',r4(p.x),r4(p.y),r4(p.w),r4(p.h)].join(':')).sort().join(';');
-  if(CUT_WORK_CACHE.has(cacheKey)) return CUT_WORK_CACHE.get(cacheKey);
-  const parts=sh.filter(p=>p.kind==='part');
-  const mids=sh.filter(p=>p.kind==='cut-line').sort((a,b)=>a.y-b.y);
-  const settings=new Set(); let operations=mids.length;
-  const zones=[]; let y=0;
-  for(const c of mids){ zones.push([y,c.y]); y=c.y+c.h; settings.add('cross|'+r4(c.y)); }
-  zones.push([y,SHEET_L]);
-  for(const [lo,hi] of zones){
-    const zp=parts.filter(p=>p.y>=lo-EPS&&p.y+p.h<=hi+EPS);
-    const plan=cutPlan(zp,[0,lo,SHEET_W,hi]);
-    operations+=plan.operations;
-    for(const s of plan.settings) settings.add(s);
-  }
-  const out={operations,settings};
-  if(CUT_WORK_CACHE.size>2000) CUT_WORK_CACHE.clear();
-  CUT_WORK_CACHE.set(cacheKey,out);
-  return out;
-}
-
-function layoutMetrics(sheets){
-  let partArea=0,keepArea=0,invArea=0,maxInv=0,noMid=0,totalCuts=0,scatter=0,midOffset=0;
-  const cutSettings=new Set();
-  const mids=[];
-  for(const sh of sheets){
-    const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-    partArea+=prs.reduce((a,[,,w,h])=>a+w*h,0);
-    scatter+=new Set(sh.filter(p=>p.kind==='part').map(p=>p.name)).size;
-    for(const p of sh){
-      if(p.kind==='offcut'){
-        const t=p.tier||tier(p.w,p.h);
-        if(t!=='trash') keepArea+=p.w*p.h;
-        if(t==='inventory'){ const a=p.w*p.h; invArea+=a; maxInv=Math.max(maxInv,a); }
-      }
-    }
-    const hasMid=sh.some(p=>p.kind==='cut-line');
-    mids.push(hasMid);
-    for(const c of sh.filter(p=>p.kind==='cut-line')) midOffset+=Math.abs(c.y+c.h/2-SHEET_L/2);
-    const oversized=prs.some(([,,w,h])=>Math.max(w,h)>CENTER_HI+EPS);
-    if(!hasMid&&!oversized) noMid++;
-    const cw=sheetCutWork(sh); totalCuts+=cw.operations;
-    for(const s of cw.settings) cutSettings.add(s);
-  }
-  const trashArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-keepArea);
-  const unusableArea=Math.max(0,sheets.length*SHEET_W*SHEET_L-partArea-invArea);
-  return {sheets:sheets.length,noMid,cuts:totalCuts,settings:cutSettings.size,
-          work:totalCuts+cutSettings.size,midOffset,invArea,maxInv,trashArea,unusableArea,mids,scatter};
-}
-
-function layoutKey(m){
-  return [m.noMid,r4(m.sheets*SHEET_WORK_COST+m.work),m.settings,m.cuts,
-          Math.round(m.midOffset*100)/100,Math.round(m.unusableArea*100)/100,-Math.round(m.maxInv*100)/100,
-          -Math.round(m.invArea*100)/100,m.scatter,m.sheets];
-}
-
-/* Natural packers often leave a perfectly good breakdown path but do not insert it
-   until after the winner is chosen. Insert that real cut before scoring so natural
-   and forced-mid candidates are compared on equal terms. */
-function withBreakdowns(sheets,material){
-  return sheets.map(sheet=>{
-    let sh=sheet.map(p=>({...p}));
-    if(sh.some(p=>p.kind==='cut-line')) return sh;
-    const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-    const y=centerCut(prs,SHEET_L);
-    if(y!=null) sh=applyMidCut(sh,y,material);
-    return sh;
-  });
-}
-
-const sheetUtil=sh=>sh.filter(p=>p.kind==='part').reduce((a,p)=>a+p.w*p.h,0)/(SHEET_W*SHEET_L);
-const placementsToParts=(sh)=>sh.filter(p=>p.kind==='part').map(p=>({
-  id:p.id, L:Math.max(p.w,p.h), S:Math.min(p.w,p.h), name:p.name }));
-function loggedOffcuts(sheets,material){
-  const offs=[];
-  for(const sh of sheets) for(const p of sh)
-    if(p.kind==='offcut'&&p.tier==='inventory') offs.push({material,l:Math.max(p.w,p.h),w:Math.min(p.w,p.h)});
-  return offs;
-}
-
-function packGrouped(parts,material,cutY,omap){
-  const packer=pp=>cutY!=null?packSheetsCrosscut(pp,material,cutY,omap):packSheets(pp,material,omap);
-  const groups=new Map();
-  for(const p of parts){ const k=r4(p.L)+'|'+r4(p.S); if(!groups.has(k))groups.set(k,[]); groups.get(k).push(p); }
-  const keys=[...groups.keys()].sort((a,b)=>{
-    const [al,as]=a.split('|').map(Number),[bl,bs]=b.split('|').map(Number);
-    return bl*bs-al*as;
-  });
-  const kept=[]; let pool=[];
-  for(const key of keys){
-    const [sheets]=packer(groups.get(key));
-    for(const sh of sheets){
-      if(sheetUtil(sh)>=FULL_UTIL) kept.push(sh);
-      else pool.push(...placementsToParts(sh));
-    }
-  }
-  if(pool.length){ const [sheets]=packer(pool); kept.push(...sheets); }
-  return [kept,loggedOffcuts(kept,material)];
-}
-
-function packGroupedHybrid(parts,material,omap){
-  const [sheets]=packGrouped(parts,material,null,omap);
-  const keep=[],redo=[];
-  for(const sh of sheets){
-    if(sheetUtil(sh)>=FULL_UTIL&&!sh.some(p=>p.kind==='cut-line')) redo.push(...placementsToParts(sh));
-    else keep.push(sh);
-  }
-  if(redo.length){ const [s]=packSheetsDynamic(redo,material,omap); keep.push(...s); }
-  return [keep,loggedOffcuts(keep,material)];
-}
-
-function bestCrosscut(parts,material,omap){
-  const total=parts.length;
-  if(!total) return null;
-  let best=null;
-  const maxY=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
-  for(let y=CENTER_LO;y<=maxY+EPS;y+=1){
-    const [sheets,offs]=packSheetsCrosscut(parts,material,y,omap);
-    const placed=sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0);
-    if(placed===total){
-      const invs=sheets.flatMap(sh=>sh.filter(p=>p.kind==='offcut'&&p.tier==='inventory').map(p=>p.w*p.h));
-      const maxInv=invs.length?Math.max(...invs):0, invArea=invs.reduce((a,b)=>a+b,0);
-      /* This is only a preliminary y search. Full sequence scoring happens when the
-         resulting candidate joins the main pool; keep this inner loop inexpensive. */
-      const key=[sheets.length,Math.abs(y+KERF/2-SHEET_L/2),
-                 -Math.round(maxInv*100)/100,-Math.round(invArea*100)/100];
-      if(!best||cmpArr(key,best[0])<0) best=[key,sheets,offs,y];
-    }
-  }
-  return best?[best[1],best[2],best[3]]:null;
-}
 function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[i]??0,y=b[i]??0; if(x!==y) return x<y?-1:1; } return 0; }
 
-/* Independent deterministic passes complement the shape-grouped packers. They place
-   pieces one at a time, may rotate identical pieces differently, and vary ordering,
-   orientation preference, split direction and breakdown position. */
-function searchHash(id,pass){
-  let x=((+id+1)*2654435761)^((pass+1)*2246822519);
-  x^=x>>>16; x=Math.imul(x,3266489917); x^=x>>>13; return x>>>0;
-}
-function searchOrder(parts,pass){
-  const mode=pass%5;
-  return [...parts].sort((a,b)=>{
-    let d=0;
-    if(mode===0) d=b.L*b.S-a.L*a.S;
-    else if(mode===1) d=b.L-a.L;
-    else if(mode===2) d=b.S-a.S;
-    else if(mode===3) d=(b.L+b.S)-(a.L+a.S);
-    if(Math.abs(d)>EPS) return d;
-    return searchHash(a.id,pass)-searchHash(b.id,pass);
-  });
-}
-function packSheetsSearch(parts,material,pass,cutY){
-  let remaining=[...parts]; const sheets=[],offs=[];
-  const forced=cutY!=null&&cutY>=CENTER_LO-EPS&&cutY+KERF<SHEET_L-EPS;
-  let guard=0;
-  while(remaining.length&&guard++<1000){
-    const placements=forced?[{name:'mid-cut-barrier',x:0,y:cutY,w:SHEET_W,h:KERF,kind:'cut-line'}]:[];
-    let free=forced?[[0,0,SHEET_W,cutY],[0,cutY+KERF,SHEET_W,SHEET_L-cutY-KERF]]
-                   :[[0,0,SHEET_W,SHEET_L]];
-    const placed=new Set();
-    for(const p of searchOrder(remaining,pass)){
-      const f=fitRect(free,p.L,p.S,pass%2===1);
-      if(!f) continue;
-      placements.push({name:p.name,id:p.id,x:f.x,y:f.y,w:f.w,h:f.h,kind:'part'});
-      splitRect(free,f,Math.floor(pass/2)%3);
-      free=coalesceRects(free); placed.add(p.id);
-    }
-    if(!placed.size) break;
-    offcutsFromFree(placements,free,material);
-    sheets.push(placements); offs.push(...loggedOffcuts([placements],material));
-    remaining=remaining.filter(p=>!placed.has(p.id));
-  }
-  return [sheets,offs,remaining];
-}
+/* ================= sheet nesting: Plywood Cut Optimizer v2 =================
+   The sheet cut maps are built by the v2 optimizer's engine, carried over as-is:
+   identical parts are packed as kerf-tight batches (grids and shared-width strips) cut
+   from one parent blank with repeated fence settings, every sheet gets its 36"-60"
+   breakdown crosscut, and thousands of seeded trials are pooled and the "Balanced"
+   layout is taken. Lines marked [index] are the only departures from v2: the sheet
+   size is the material's own (SHEET_W x SHEET_L) and a part longer than a half sheet
+   is ripped off a whole sheet before that sheet's breakdown cut. Rack offcuts and
+   boards still use the column packer above. */
+/* Search depth. A trial costs roughly the square of the part count, so small materials
+   get v2 "Standard" (4000 trials) and big ones taper to v2 "Quick" (1200). Too shallow
+   a search on a small list falls through to an extra sheet a deeper one avoids. */
+const cutTrials=n=>Math.min(4000,Math.max(1200,Math.round(120000/Math.max(1,n))));
+const CUTOPT=(()=>{
+  'use strict';
+  const EPS = 0.0001;
+  const FIRST_MIN = CENTER_LO, FIRST_MAX = CENTER_HI;
+  /* ---------------------------------------------------------------- units */
 
-function chooseLayout(parts,material,budget){
-  const shapes=[...new Set(parts.map(p=>r4(p.L)+'|'+r4(p.S)))];
-  const omaps=[];
-  const cap = budget==='fast'?4:6;
-  if(shapes.length<=cap){
-    const modes=['L_vert','S_vert'];
-    const total=Math.pow(2,shapes.length);
-    for(let m=0;m<total;m++){
-      const o={}; shapes.forEach((s,i)=>o[s]=modes[(m>>i)&1]);
-      omaps.push(o);
-    }
-  }else{
-    for(const mode of ['yield','L_vert','S_vert']){
-      const o={}; shapes.forEach(s=>o[s]=mode); omaps.push(o);
-    }
-  }
-  const cands=[];
-  for(const omap of omaps){
-    cands.push(['mixed [natural]',packSheets(parts,material,omap)[0]]);
-    cands.push(['mixed [dynamic-mid]',packSheetsDynamic(parts,material,omap)[0]]);
-    cands.push(['grouped [natural]',packGrouped(parts,material,null,omap)[0]]);
-    cands.push(['grouped-hybrid [dynamic-mid]',packGroupedHybrid(parts,material,omap)[0]]);
-    const cc=bestCrosscut(parts,material,omap);
-    if(cc){
-      cands.push(['mid-cut-all [forced-mid]',cc[0]]);
-      cands.push(['grouped+mid [forced-mid]',packGrouped(parts,material,cc[2],omap)[0]]);
-    }
-  }
-  const passes=budget==='fast'?8:16;
-  const maxCut=Math.min(CENTER_HI,SHEET_L-KERF-EPS);
-  const cutChoices=maxCut>=CENTER_LO-EPS
-    ? [null,CENTER_LO,r4((CENTER_LO+maxCut)/2),maxCut]
-    : [null];
-  for(let pass=0;pass<passes;pass++){
-    const cutY=cutChoices[pass%cutChoices.length];
-    cands.push(['search '+(pass+1)+'/'+passes+(cutY==null?' [natural]':' [mid '+fmt(cutY)+'"]'),
-                packSheetsSearch(parts,material,pass,cutY)[0]]);
-  }
-  const total=parts.length;
-  const scored=[];
-  for(const [name,sheets] of cands){
-    if(sheets.reduce((a,s)=>a+s.filter(p=>p.kind==='part').length,0)!==total) continue;
-    const ready=withBreakdowns(sheets,material);
-    const m=layoutMetrics(ready);
-    scored.push([layoutKey(m),name,ready,m]);
-  }
-  if(!scored.length) return null;
-  scored.sort((a,b)=>cmpArr(a[0],b[0]));
+  function gcd(a, b) { while (b) [a, b] = [b, a % b]; return a; }
 
-  /* Re-score after safely mixing orientations. The base packers carry exact,
-     kerf-adjusted free rectangles, so compaction can rotate individual pieces without
-     reconstructing phantom space from their finished outlines. */
-  const finals=[];
-  for(const [key,name,sheets,m] of scored.slice(0,budget==='fast'?12:24)){
-    const c=compactSheets(sheets,material);
-    const cm=layoutMetrics(c);
-    finals.push([layoutKey(cm),name,c,cm]);
+  function formatInches(value) {
+    const rounded = Math.round(value * 32) / 32;
+    const whole = Math.floor(rounded + EPS);
+    let numerator = Math.round((rounded - whole) * 32);
+    if (numerator === 32) return `${whole + 1}″`;
+    if (!numerator) return `${whole}″`;
+    const divisor = gcd(numerator, 32);
+    return `${whole ? whole + ' ' : ''}${numerator / divisor}/${32 / divisor}″`;
   }
-  finals.sort((a,b)=>cmpArr(a[0],b[0]));
-  return {name:finals[0][1],sheets:finals[0][2],metrics:finals[0][3]};
-}
 
-function retightenCuts(sheets,material){
-  const invTotal=sh=>sh.filter(p=>p.kind==='offcut'&&p.tier==='inventory').reduce((a,p)=>a+p.w*p.h,0);
-  return sheets.map(sh=>{
-    const parts=placementsToParts(sh);
-    const res=packOneSheetDynamic(parts,material,null);
-    if(res&&res[1].filter(p=>p.kind==='part').length===parts.length&&invTotal(res[1])>invTotal(sh)+EPS)
-      return res[1];
-    return sh;
-  });
-}
-
-
-/* ---- mixed-orientation compaction ----
-   The column packer locks one orientation per part shape, so a set like 5 identical
-   back panels can never mix "4 upright + 1 sideways" on a single sheet. This pass
-   empties the least-full sheet by dropping its parts into free space on the other
-   sheets, trying BOTH orientations per part. Free rects already treat the mid-cut
-   as an obstacle, so nothing straddles the breakdown cut. */
-function coalesceRects(input){
-  const out=input.map(r=>r.slice());
-  /* A guillotine split can leave two touching rectangles even though no kerf runs
-     between them. Join exact shared edges only; a real saw gap remains a gap. */
-  let joined=true;
-  while(joined){
-    joined=false;
-    outer:for(let i=0;i<out.length;i++) for(let j=i+1;j<out.length;j++){
-      const a=out[i],b=out[j]; let m=null;
-      if(Math.abs(a[1]-b[1])<=EPS&&Math.abs(a[3]-b[3])<=EPS){
-        if(Math.abs(a[0]+a[2]-b[0])<=EPS) m=[a[0],a[1],a[2]+b[2],a[3]];
-        else if(Math.abs(b[0]+b[2]-a[0])<=EPS) m=[b[0],a[1],a[2]+b[2],a[3]];
-      }else if(Math.abs(a[0]-b[0])<=EPS&&Math.abs(a[2]-b[2])<=EPS){
-        if(Math.abs(a[1]+a[3]-b[1])<=EPS) m=[a[0],a[1],a[2],a[3]+b[3]];
-        else if(Math.abs(b[1]+b[3]-a[1])<=EPS) m=[a[0],b[1],a[2],a[3]+b[3]];
-      }
-      if(m){ out.splice(j,1); out[i]=m; joined=true; break outer; }
-    }
+  /* [index] memoised: the search formats the same few dimensions millions of times */
+  const KEY_CACHE = new Map();
+  function keyInches(value) {
+    let key = KEY_CACHE.get(value);
+    if (key === undefined) { key = (Math.round(value * 32) / 32).toFixed(4); KEY_CACHE.set(value, key); }
+    return key;
   }
-  return out;
-}
-function sheetFreeRects(sh){
-  /* offcutsFromFree records every positive free rectangle, including trash. These
-     are the packer's real disjoint leftovers with all kerfs already removed. */
-  return coalesceRects(sh.filter(p=>p.kind==='offcut').map(p=>[p.x,p.y,p.w,p.h]));
-}
-function fitRect(rects,L,S,flip){
-  let best=null;
-  for(let i=0;i<rects.length;i++){
-    const [rx,ry,rw,rh]=rects[i];
-    const opts=flip?[[S,L],[L,S]]:[[L,S],[S,L]];
-    for(const [w,h] of opts){
-      if(w<=rw+EPS&&h<=rh+EPS){
-        const waste=rw*rh-w*h;
-        if(!best||waste<best.waste) best={waste,i,x:rx,y:ry,w,h,rx,ry,rw,rh};
+
+  function makeRng(seed) {
+    let state = seed >>> 0;
+    return () => {
+      state += 0x6D2B79F5;
+      let t = state;
+      t = Math.imul(t ^ t >>> 15, t | 1);
+      t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  /* --------------------------------------------------------------- batches
+     A batch is a rectangular parent blank holding `rows × cols` identical
+     pieces in one shared orientation, separated by nothing but the kerf.
+     Batches are the unit that gets packed; pieces never get packed alone
+     unless the batch size is 1.                                            */
+
+  const SIZE_MENU = [4, 2, 4, 6, 2, 8, 3, 5, 4, 1, 6, 2];
+
+  function chunkQuantity(qty, maxSize, even) {
+    const sizes = [];
+    if (maxSize <= 1) { for (let i = 0; i < qty; i++) sizes.push(1); return sizes; }
+    if (even) {
+      const groups = Math.ceil(qty / maxSize);
+      const base = Math.floor(qty / groups);
+      const extra = qty % groups;
+      for (let i = 0; i < groups; i++) sizes.push(base + (i < extra ? 1 : 0));
+    } else {
+      let left = qty;
+      while (left > 0) {
+        let take = Math.min(maxSize, left);
+        if (left - take === 1 && take > 1) take -= 1;
+        sizes.push(take);
+        left -= take;
       }
     }
+    return sizes;
   }
-  return best;
-}
-/* The two leftovers either side of a placement have to be disjoint. A full-height
-   strip to the right AND a full-width strip below overlap in the bottom-right corner,
-   and both were offered for reuse — so two parts could be placed in the same square
-   inches and the cut plan looked fine. One of the two edges has to give way, which is
-   what a guillotine cut actually does: the split runs either across or down, not both.
-   Split along whichever leaves the larger single piece. */
-function splitRect(rects,f,mode){
-  rects.splice(f.i,1);
-  const occW=Math.min(f.w+KERF,f.rw), occH=Math.min(f.h+KERF,f.rh);
-  const restW=f.rw-occW, restH=f.rh-occH;
-  const down=mode===1?true:mode===2?false:(restW*f.rh>=restH*f.rw);
-  const cands=down
-    ? [[f.rx+occW,f.ry,restW,f.rh],[f.rx,f.ry+occH,occW,restH]]   // cut down the right
-    : [[f.rx+occW,f.ry,restW,occH],[f.rx,f.ry+occH,f.rw,restH]];  // cut across the bottom
-  for(const [x,y,w,h] of cands)
-    if(w>EPS&&h>EPS) rects.push([x,y,w,h]);
-}
-function compactSheets(sheets,material){
-  let work=sheets.map(s=>s.map(p=>({...p})));
-  for(let pass=0;pass<sheets.length;pass++){
-    const counts=work.map((s,i)=>[s.filter(p=>p.kind==='part').length,i]).sort((a,b)=>a[0]-b[0]);
-    let moved=false;
-    for(const [,di] of counts){
-      const donor=work[di].filter(p=>p.kind==='part').sort((a,b)=>b.w*b.h-a.w*a.h);
-      if(!donor.length) continue;
-      const targets=work.map((s,i)=>i).filter(i=>i!==di);
-      const rects={}; for(const i of targets) rects[i]=sheetFreeRects(work[i]);
-      const plan=[];
-      let ok=true;
-      for(const part of donor){
-        const L=Math.max(part.w,part.h), S=Math.min(part.w,part.h);
-        let pick=null;
-        for(const i of targets){
-          const f=fitRect(rects[i],L,S);
-          if(f&&(!pick||f.waste<pick.f.waste)) pick={i,f};
+
+  function makeBatchPlan(parts, trial, rng) {
+    const groups = new Map();
+    parts.forEach(p => {
+      if (!groups.has(p.typeIndex)) groups.set(p.typeIndex, []);
+      groups.get(p.typeIndex).push(p);
+    });
+    const items = [];
+    let nextId = 1;
+    /* Shop practice: parts that share a rip width come off one strip, even
+       when they are different parts. Try that on half the trials. */
+    const stripTrial = trial % 2 === 0;
+    const maxStrip = [59.875, 48, 40, 59.875][trial % 4];
+    if (stripTrial) {
+      const byWidth = new Map();
+      parts.forEach(p => [p.w, p.h].forEach(v => {
+        const key = keyInches(v);
+        if (!byWidth.has(key)) byWidth.set(key, {width: v, members: []});
+        byWidth.get(key).members.push(p);
+      }));
+      const used = new Set();
+      [...byWidth.values()].sort((a, b) => a.width - b.width).forEach(entry => {
+        const pool = entry.members.filter(p => !used.has(p));
+        const lens = pool.map(p => Math.abs(p.w - entry.width) <= EPS ? p.h : p.w);
+        if (pool.length < 2 || new Set(lens.map(keyInches)).size < 2) return;
+        const order = pool.map((p, i) => ({p, len: lens[i]})).sort((a, b) => b.len - a.len);
+        while (order.length) {
+          const strip = [];
+          let total = 0;
+          for (let i = 0; i < order.length && strip.length < 6;) {
+            const next = total ? total + KERF + order[i].len : order[i].len;
+            if (next <= maxStrip + EPS) { total = next; strip.push(order.splice(i, 1)[0]); }
+            else i++;
+          }
+          if (strip.length < 2) break;
+          strip.forEach(x => used.add(x.p));
+          items.push(makeStrip(entry.width, strip.map(x => x.p), nextId++));
         }
-        if(!pick){ ok=false; break; }
-        splitRect(rects[pick.i],pick.f);
-        plan.push({sheet:pick.i,part,x:pick.f.x,y:pick.f.y,w:pick.f.w,h:pick.f.h});
-      }
-      if(!ok) continue;
-      const touched=new Set();
-      for(const m of plan){
-        work[m.sheet].push({name:m.part.name,id:m.part.id,x:m.x,y:m.y,w:m.w,h:m.h,kind:'part'});
-        touched.add(m.sheet);
-      }
-      for(const i of touched){
-        const out=work[i].filter(p=>p.kind!=='offcut');
-        offcutsFromFree(out,rects[i],material);
-        work[i]=out;
-      }
-      work.splice(di,1);
-      moved=true;
-      break;
+      });
+      groups.forEach((group, key) => groups.set(key, group.filter(p => !used.has(p))));
     }
-    if(!moved) break;
+    groups.forEach(group => {
+      if (!group.length) return;
+      const type = group[0];
+      const maxSize = SIZE_MENU[(trial + type.typeIndex * 3) % SIZE_MENU.length];
+      const even = ((trial + type.typeIndex) % 2) === 0;
+      const sizes = chunkQuantity(group.length, maxSize, even);
+      let cursor = 0;
+      sizes.forEach(size => {
+        const sources = group.slice(cursor, cursor + size);
+        cursor += size;
+        items.push(makeItem(sources, nextId++));
+      });
+    });
+    if (rng) items.forEach(item => { item.jitter = rng(); });
+    return items;
   }
-  return work;
-}
 
-function packMaterial(material,matParts,stockOffcuts,budget){
+  function makeStrip(width, sources, id) {
+    return {
+      id, kind: 'strip',
+      name: sources.length > 1 ? `${sources[0].name} + ${sources.length - 1} more` : sources[0].name,
+      color: sources[0].color,
+      typeIndex: sources[0].typeIndex,
+      width,
+      lens: sources.map(p => (Math.abs(p.w - width) <= EPS ? p.h : p.w)),
+      count: sources.length,
+      sources,
+      area: sources.reduce((sum, p) => sum + p.area, 0),
+      jitter: 0
+    };
+  }
+
+  function makeItem(sources, id) {
+    const first = sources[0];
+    return {
+      id,
+      name: first.name,
+      color: first.color,
+      typeIndex: first.typeIndex,
+      pw: first.w,
+      ph: first.h,
+      count: sources.length,
+      sources,
+      area: sources.length * first.area,
+      kind: 'grid',
+      jitter: 0
+    };
+  }
+
+  /* Split the biggest batch in half so a failed trial can retry with
+     smaller manufacturing runs rather than losing the minimum sheet count. */
+  function degradePlan(items) {
+    let target = -1;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].count > 1 && (target < 0 || items[i].count > items[target].count)) target = i;
+    }
+    if (target < 0) return null;
+    const item = items[target];
+    const half = Math.ceil(item.count / 2);
+    const next = items.slice();
+    let nextId = Math.max(...items.map(i => i.id)) + 1;
+    const split = (list, id) => item.kind === 'strip' ? makeStrip(item.width, list, id) : makeItem(list, id);
+    next.splice(target, 1, split(item.sources.slice(0, half), item.id), split(item.sources.slice(half), nextId++));
+    return next;
+  }
+
+  /* All rectangular parent blanks this batch can be cut from: every
+     row/column factorisation, in each of the two shared orientations. */
+  function batchShapes(item) {
+    const out = [];
+    if (item.kind === 'strip') {
+      const total = item.lens.reduce((sum, v) => sum + v, 0) + (item.lens.length - 1) * KERF;
+      const shapes = [
+        {kind: 'strip', axis: 'y', pw: item.width, ph: item.lens[0], bw: item.width, bh: total, lens: item.lens, rows: item.lens.length, cols: 1},
+        {kind: 'strip', axis: 'x', pw: item.lens[0], ph: item.width, bw: total, bh: item.width, lens: item.lens, rows: 1, cols: item.lens.length}
+      ];
+      return shapes.filter(sh => sh.bw <= SHEET_W + EPS && sh.bh <= SHEET_L + EPS);
+    }
+    const seen = new Set();
+    for (let cols = 1; cols <= item.count; cols++) {
+      if (item.count % cols) continue;
+      const rows = item.count / cols;
+      [[item.pw, item.ph], [item.ph, item.pw]].forEach(([pw, ph]) => {
+        const bw = cols * pw + (cols - 1) * KERF;
+        const bh = rows * ph + (rows - 1) * KERF;
+        if (bw > SHEET_W + EPS || bh > SHEET_L + EPS) return;
+        const key = `${keyInches(bw)}|${keyInches(bh)}|${keyInches(pw)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push({kind: 'grid', rows, cols, pw, ph, bw, bh});
+      });
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------------- sheets */
+
+  function candidateFirstCuts(parts) {
+    const dims = [...new Set(parts.flatMap(p => [p.w, p.h]).map(v => Math.round(v * 32) / 32))];
+    const values = new Set([36, 40, 42, 48, 54, 60, 59.875]);
+    const add = value => {
+      const rounded = Math.round(value * 32) / 32;
+      if (rounded >= FIRST_MIN - EPS && rounded <= FIRST_MAX + EPS) {
+        values.add(rounded);
+        const complement = Math.round((SHEET_L - rounded - KERF) * 32) / 32;
+        if (complement >= FIRST_MIN - EPS && complement <= FIRST_MAX + EPS) values.add(complement);
+      }
+    };
+    const stacks = [];
+    dims.forEach(d => {
+      for (let n = 1; n <= 6; n++) {
+        const value = n * d + (n - 1) * KERF;
+        if (value > FIRST_MAX + EPS) break;
+        stacks.push(value);
+        add(value);
+      }
+    });
+    stacks.forEach(a => stacks.forEach(b => add(a + KERF + b)));
+    return [...values]
+      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS && SHEET_L - v - KERF > 0)
+      .sort((a, b) => a - b);
+  }
+
+  /* [index] The first `openCount` sheets carry parts longer than any half sheet. They
+     start whole: those parts are ripped off full length first, then what is left of
+     the sheet gets its breakdown cut (applyOpenBreakdowns). */
+  function newLayout(sheetCount, firstCuts, openCount = 0) {
+    let nextCutId = 1;
+    const sheets = [];
+    const free = [];
+    const cuts = [];
+    for (let s = 0; s < sheetCount; s++) {
+      const d = firstCuts[s];
+      if (s < openCount) {
+        sheets.push({index: s, firstCut: d, open: true, breakX: SHEET_W, placements: [], partCount: 0});
+        free.push({sheet: s, x: 0, y: 0, w: SHEET_W, h: SHEET_L, availableAfter: null, open: true});
+        continue;
+      }
+      const id = nextCutId++;
+      sheets.push({index: s, firstCut: d, placements: [], partCount: 0});
+      cuts.push({id, parent: null, sheet: s, setting: d, axis: 'horizontal', initial: true,
+        rectW: SHEET_W, rectH: SHEET_L, label: 'Required sheet breakdown'});
+      free.push({sheet: s, x: 0, y: 0, w: SHEET_W, h: d, availableAfter: id});
+      free.push({sheet: s, x: 0, y: d + KERF, w: SHEET_W, h: SHEET_L - d - KERF, availableAfter: id});
+    }
+    return {sheets, free, cuts, nextCutId, nextBatchId: 1};
+  }
+
+  function dimFits(space, part) {
+    const gap = space - part;
+    return gap >= -EPS && (Math.abs(gap) <= EPS || gap >= KERF - EPS);
+  }
+
+  function leftoversFor(rect, pw, ph, order) {
+    const out = [];
+    const cutW = rect.w - pw > EPS;
+    const cutH = rect.h - ph > EPS;
+    if (order === 'V') {
+      if (cutW) out.push({w: rect.w - pw - KERF, h: rect.h});
+      if (cutH) out.push({w: pw, h: rect.h - ph - KERF});
+    } else {
+      if (cutH) out.push({w: rect.w, h: rect.h - ph - KERF});
+      if (cutW) out.push({w: rect.w - pw - KERF, h: ph});
+    }
+    return out.filter(r => r.w > EPS && r.h > EPS);
+  }
+
+  /* [index] Longest piece either half of a broken-down sheet can hold. */
+  function halfMax() { return Math.max(FIRST_MAX, SHEET_L - FIRST_MIN - KERF); }
+
+  /* A batch is long when its pieces are, not when the batch is merely too big for a
+     half; v2 splits those itself. */
+  function isLongItem(item) {
+    return item.sources.some(p => Math.max(p.w, p.h) > halfMax() + EPS);
+  }
+
+  /* [index] Once the long rips are off, the rest of each open sheet is broken down
+     like any other sheet, at that sheet's first-cut setting. */
+  function applyOpenBreakdowns(layout) {
+    const open = layout.free.filter(r => r.open);
+    layout.free = layout.free.filter(r => !r.open);
+    open.forEach(r => {
+      const sheet = layout.sheets[r.sheet];
+      const d = sheet.firstCut;
+      if (r.h - d - KERF <= EPS) { layout.free.push({...r, open: false}); return; }
+      sheet.breakX = r.x;
+      const id = layout.nextCutId++;
+      layout.cuts.push({id, parent: r.availableAfter, sheet: r.sheet, setting: d, axis: 'horizontal', initial: true,
+        rectW: r.w, rectH: r.h, label: 'Required sheet breakdown'});
+      layout.free.push({sheet: r.sheet, x: r.x, y: r.y, w: r.w, h: d, availableAfter: id});
+      layout.free.push({sheet: r.sheet, x: r.x, y: r.y + d + KERF, w: r.w, h: r.h - d - KERF, availableAfter: id});
+    });
+  }
+
+  function isScrap(rect) {
+    return Math.min(rect.w, rect.h) < 4 - EPS || rect.w * rect.h < 144 - EPS;
+  }
+
+  /* ------------------------------------------------------------- placement */
+
+  function placementOptions(layout, item, rng, dimensionUse) {
+    const options = [];
+    const settingCounts = new Map();
+    layout.cuts.forEach(c => settingCounts.set(keyInches(c.setting), (settingCounts.get(keyInches(c.setting)) || 0) + 1));
+    const shapes = batchShapes(item);
+    /* [index] per-sheet facts hoisted out of the option loop; the layout cannot change
+       while options are being scored, so every score is exactly what v2 computes */
+    const shapeFacts = shapes.map(({bw, bh, pw, ph}) => ({
+      planned: (dimensionUse.get(keyInches(pw)) || 0) + (dimensionUse.get(keyInches(ph)) || 0)
+        + (dimensionUse.get(keyInches(bw)) || 0) + (dimensionUse.get(keyInches(bh)) || 0),
+      reuse: (settingCounts.get(keyInches(pw)) || 0) + (settingCounts.get(keyInches(ph)) || 0)
+        + (settingCounts.get(keyInches(bw)) || 0) + (settingCounts.get(keyInches(bh)) || 0)
+    }));
+    const sheetFacts = new Map();
+    const factsFor = sheet => {
+      if (!sheetFacts.has(sheet)) {
+        const sheetPlacements = layout.sheets[sheet].placements;
+        sheetFacts.set(sheet, {
+          sameTypeHere: sheetPlacements.filter(p => p.typeIndex === item.typeIndex).length,
+          foreignTypesHere: new Set(sheetPlacements.filter(p => p.typeIndex !== item.typeIndex).map(p => p.typeIndex)).size,
+          typeElsewhere: layout.sheets.some((sh, i) => i !== sheet && sh.placements.some(p => p.typeIndex === item.typeIndex)),
+          twins: layout.sheets.flatMap((sh, i) => i === sheet ? [] : sh.placements.filter(p => p.typeIndex === item.typeIndex))
+        });
+      }
+      return sheetFacts.get(sheet);
+    };
+    layout.free.forEach((rect, freeIndex) => {
+      shapes.forEach((shape, shapeIndex) => {
+        const {bw, bh, pw, ph, rows, cols} = shape;
+        if (!dimFits(rect.w, bw) || !dimFits(rect.h, bh)) return;
+        const {planned, reuse} = shapeFacts[shapeIndex];
+        /* [index] a whole sheet is only ever ripped full length, never crosscut first */
+        const orders = (rect.open || Math.abs(rect.w - bw) <= EPS || Math.abs(rect.h - bh) <= EPS) ? ['V'] : ['V', 'H'];
+        orders.forEach(order => {
+          const remains = leftoversFor(rect, bw, bh, order);
+          const localScrap = remains.filter(isScrap).reduce((sum, r) => sum + r.w * r.h, 0);
+          const smallestShort = remains.length ? Math.min(...remains.map(r => Math.min(r.w, r.h))) : 99;
+          const areaWaste = rect.w * rect.h - bw * bh;
+          const sliverPenalty = smallestShort < 4 ? (4 - smallestShort) * 18 : 0;
+          /* keep a part type on as few sheets as possible */
+          const {sameTypeHere, foreignTypesHere, typeElsewhere, twins} = factsFor(rect.sheet);
+          const consolidation = sameTypeHere * 9 - foreignTypesHere * 6 - (typeElsewhere && !sameTypeHere ? 55 : 0);
+          /* repeat a sheet: same blank, same spot, same grid on another sheet */
+          const blankX = rect.x, blankY = rect.y;
+          const twin = twins.some(p =>
+            Math.abs(p.batchX - blankX) <= EPS && Math.abs(p.batchY - blankY) <= EPS &&
+            Math.abs(p.batchW - bw) <= EPS && Math.abs(p.batchH - bh) <= EPS && Math.abs(p.w - pw) <= EPS);
+          const patternBonus = twin ? 70 : 0;
+          /* leave one full-length strip rather than several stubs */
+          const spanBonus = remains.reduce((sum, r) =>
+            sum + (Math.max(r.w, r.h) >= Math.max(rect.w, rect.h) - EPS ? 14 : 0) +
+            (Math.max(r.w, r.h) >= 30 ? 6 : 0), 0) - (remains.length > 1 ? 12 : 0);
+          const exactBonus = (Math.abs(rect.w - bw) <= EPS ? 30 : 0) + (Math.abs(rect.h - bh) <= EPS ? 30 : 0);
+          /* one long shared rip beats many short ones: reward wide runs */
+          const runBonus = (cols - 1) * 6 + (rows - 1) * 6;
+          const score = areaWaste * .018 + localScrap * .14 + sliverPenalty
+            - planned * 1.8 - reuse * 2.2 - exactBonus - runBonus - consolidation - patternBonus - spanBonus + rng() * 8;
+          options.push({freeIndex, order, shape, score});
+        });
+      });
+    });
+    options.sort((a, b) => a.score - b.score);
+    return options;
+  }
+
+  function applyPlacement(layout, item, option) {
+    const rect = layout.free.splice(option.freeIndex, 1)[0];
+    const {order, shape} = option;
+    const {bw, bh, pw, ph, rows, cols} = shape;
+    const tag = item.count > 1 ? `${item.name} ×${item.count}` : item.name;
+    const addCut = (parent, axis, setting, panelW, panelH, label, initial = false) => {
+      const id = layout.nextCutId++;
+      layout.cuts.push({id, parent, sheet: rect.sheet, setting, axis, initial,
+        rectW: panelW, rectH: panelH, label});
+      return id;
+    };
+
+    /* 1. isolate the parent blank with guillotine cuts across the panel */
+    let dependency = rect.availableAfter;
+    const keep = r => { if (r.w > EPS && r.h > EPS) layout.free.push(r); };
+    if (order === 'V') {
+      if (rect.w - bw > EPS) {
+        dependency = addCut(dependency, 'vertical', bw, rect.w, rect.h, `${tag}: establish ${formatInches(bw)} blank width`, !!rect.open);
+        keep({sheet: rect.sheet, x: rect.x + bw + KERF, y: rect.y, w: rect.w - bw - KERF, h: rect.h, availableAfter: dependency, open: rect.open});
+      }
+      if (rect.h - bh > EPS) {
+        dependency = addCut(dependency, 'horizontal', bh, bw, rect.h, `${tag}: establish ${formatInches(bh)} blank length`);
+        keep({sheet: rect.sheet, x: rect.x, y: rect.y + bh + KERF, w: bw, h: rect.h - bh - KERF, availableAfter: dependency});
+      }
+    } else {
+      if (rect.h - bh > EPS) {
+        dependency = addCut(dependency, 'horizontal', bh, rect.w, rect.h, `${tag}: establish ${formatInches(bh)} blank length`);
+        keep({sheet: rect.sheet, x: rect.x, y: rect.y + bh + KERF, w: rect.w, h: rect.h - bh - KERF, availableAfter: dependency});
+      }
+      if (rect.w - bw > EPS) {
+        dependency = addCut(dependency, 'vertical', bw, rect.w, bh, `${tag}: establish ${formatInches(bw)} blank width`);
+        keep({sheet: rect.sheet, x: rect.x + bw + KERF, y: rect.y, w: rect.w - bw - KERF, h: bh, availableAfter: dependency});
+      }
+    }
+
+    /* 2. break the blank down inside itself: one repeated rip setting,
+          then one repeated crosscut setting. No scrap is produced here. */
+    const batchId = layout.nextBatchId++;
+    const sheetRef = layout.sheets[rect.sheet];
+    if (shape.kind === 'strip') {
+      const lens = shape.lens;
+      const across = shape.axis === 'y';
+      let dep = dependency;
+      let panelW = bw, panelH = bh;
+      let offset = 0;
+      lens.forEach((len, i) => {
+        if (i < lens.length - 1) {
+          dep = addCut(dep, across ? 'horizontal' : 'vertical', len, panelW, panelH,
+            `${tag}: cut ${formatInches(len)} piece ${i + 1} of ${lens.length} from the ${formatInches(item.width)} strip`);
+          if (across) panelH -= len + KERF; else panelW -= len + KERF;
+        }
+        const source = item.sources[i];
+        const pw2 = across ? item.width : len;
+        const ph2 = across ? len : item.width;
+        sheetRef.placements.push({
+          name: source.name, color: source.color, typeIndex: source.typeIndex, instance: source.instance,
+          x: rect.x + (across ? 0 : offset),
+          y: rect.y + (across ? offset : 0),
+          w: pw2, h: ph2,
+          rotated: Math.abs(pw2 - source.w) > EPS,
+          batchId, batchSize: lens.length, batchRows: shape.rows, batchCols: shape.cols,
+          batchKind: 'strip', batchAxis: across ? 'y' : 'x',
+          batchX: rect.x, batchY: rect.y, batchW: bw, batchH: bh
+        });
+        offset += len + KERF;
+      });
+      sheetRef.partCount += lens.length;
+      return;
+    }
+    const colDeps = [];
+    let panelW = bw;
+    let ripDep = dependency;
+    for (let c = 0; c < cols; c++) {
+      if (c < cols - 1) {
+        ripDep = addCut(ripDep, 'vertical', pw, panelW, bh,
+          `${tag}: rip ${formatInches(pw)} piece ${c + 1} of ${cols}`);
+        colDeps.push(ripDep);
+        panelW -= pw + KERF;
+      } else {
+        colDeps.push(ripDep);
+      }
+    }
+    for (let c = 0; c < cols; c++) {
+      let dep = colDeps[c];
+      let panelH = bh;
+      for (let r = 0; r < rows - 1; r++) {
+        dep = addCut(dep, 'horizontal', ph, pw, panelH,
+          `${tag}: crosscut ${formatInches(ph)} — column ${c + 1}, piece ${r + 1} of ${rows}`);
+        panelH -= ph + KERF;
+        colDeps[c] = dep;
+      }
+    }
+
+    /* 3. record the pieces */
+    const sheet = sheetRef;
+    item.sources.forEach((source, index) => {
+      const r = Math.floor(index / cols);
+      const c = index % cols;
+      sheet.placements.push({
+        name: source.name, color: source.color, typeIndex: source.typeIndex, instance: source.instance,
+        x: rect.x + c * (pw + KERF),
+        y: rect.y + r * (ph + KERF),
+        w: pw, h: ph,
+        rotated: Math.abs(pw - source.w) > EPS,
+        batchId, batchSize: item.count, batchRows: rows, batchCols: cols,
+        batchKind: 'grid', batchAxis: null,
+        batchX: rect.x, batchY: rect.y, batchW: bw, batchH: bh
+      });
+    });
+    sheet.partCount += item.count;
+  }
+
+  /* -------------------------------------------------------------- schedule */
+
+  /* Fence-change scheduling. Any topological order of the cut tree is legal,
+     so the cost is the number of setting runs. At each step we measure how
+     long a run each available setting can sustain — following the chain of
+     children that share that setting — and commit the longest one. */
+  function scheduleCuts(cuts, rng, attempts = 4) {
+    const children = new Map();
+    const roots = [];
+    const keyOf = new Map();
+    cuts.forEach(c => {
+      keyOf.set(c.id, keyInches(c.setting));
+      if (c.parent == null) { roots.push(c); return; }
+      if (!children.has(c.parent)) children.set(c.parent, []);
+      children.get(c.parent).push(c);
+    });
+    const chainCount = (cut, key) => {
+      let total = 1;
+      (children.get(cut.id) || []).forEach(child => {
+        if (keyOf.get(child.id) === key) total += chainCount(child, key);
+      });
+      return total;
+    };
+    let best = null;
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      const ready = roots.slice();
+      const sequence = [];
+      let changes = -1;
+      let guard = cuts.length * 4;
+      let initialLeft = cuts.filter(c => c.initial).length;
+      while (sequence.length < cuts.length && guard-- > 0) {
+        const groups = new Map();
+        const phase = initialLeft > 0 ? ready.filter(c => c.initial) : ready;
+        phase.forEach(c => {
+          const key = keyOf.get(c.id);
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(c);
+        });
+        let bestKey = null;
+        let bestScore = -Infinity;
+        groups.forEach((items, key) => {
+          const run = items.reduce((sum, c) => sum + chainCount(c, key), 0);
+          const score = run * 100 + (attempt ? rng() * 70 : 0);
+          if (score > bestScore) { bestScore = score; bestKey = key; }
+        });
+        const stack = groups.get(bestKey).slice();
+        stack.forEach(c => ready.splice(ready.indexOf(c), 1));
+        while (stack.length) {
+          const cut = stack.pop();
+          if (cut.initial) initialLeft--;
+          sequence.push(cut);
+          (children.get(cut.id) || []).forEach(child => {
+            if (keyOf.get(child.id) === bestKey && !(initialLeft > 0 && !child.initial)) stack.push(child);
+            else ready.push(child);
+          });
+        }
+        changes++;
+      }
+      if (sequence.length !== cuts.length) continue;
+      if (!best || changes < best.changes) best = {changes: Math.max(0, changes), sequence};
+    }
+    return best || {changes: 0, sequence: cuts.slice()};
+  }
+
+  /* --------------------------------------------------------------- metrics */
+
+  function batchStats(sheets) {
+    const batches = new Map();
+    let matchedParts = 0;
+    let unmatchedParts = 0;
+    sheets.forEach(sheet => sheet.placements.forEach(p => {
+      if (p.batchSize > 1) {
+        matchedParts++;
+        batches.set(p.batchId, p.batchSize);
+      } else unmatchedParts++;
+    }));
+    const sizes = [...batches.values()];
+    return {
+      matchedParts,
+      unmatchedParts,
+      batchCount: sizes.length,
+      largestBatch: sizes.length ? Math.max(...sizes) : 0,
+      averageBatch: sizes.length ? sizes.reduce((a, b) => a + b, 0) / sizes.length : 0
+    };
+  }
+
+  function evaluateLayout(layout, partArea, cutSeconds, changeSeconds, rng, scheduleAttempts = 6) {
+    if (layout.sheets.some(s => s.partCount === 0)) return null;
+    const schedule = scheduleCuts(layout.cuts, rng, scheduleAttempts);
+    const scrapRects = layout.free.filter(isScrap);
+    const offcuts = layout.free.filter(r => !isScrap(r)).sort((a, b) => b.w * b.h - a.w * a.h);
+    const scrapArea = scrapRects.reduce((sum, r) => sum + r.w * r.h, 0);
+    const remainderArea = layout.free.reduce((sum, r) => sum + r.w * r.h, 0);
+    const kerfArea = Math.max(0, layout.sheets.length * SHEET_W * SHEET_L - partArea - remainderArea);
+    const largestOffcut = offcuts[0] ? offcuts[0].w * offcuts[0].h : 0;
+    const stats = batchStats(layout.sheets);
+    const sheetsPerType = new Map();
+    layout.sheets.forEach(sheet => sheet.placements.forEach(p => {
+      if (!sheetsPerType.has(p.typeIndex)) sheetsPerType.set(p.typeIndex, new Set());
+      sheetsPerType.get(p.typeIndex).add(sheet.index);
+    }));
+    let typeSpread = 0;
+    sheetsPerType.forEach(set => { typeSpread += set.size - 1; });
+    const patterns = new Set(layout.sheets.map(sheet => keyInches(sheet.firstCut) + '#' +
+      sheet.placements.map(p => [p.typeIndex, keyInches(p.x), keyInches(p.y), keyInches(p.w), keyInches(p.h)].join(','))
+        .sort().join(';')));
+    const repeatedSheets = layout.sheets.length - patterns.size;
+    const longestOffcutSide = offcuts.reduce((m, r) => Math.max(m, Math.max(r.w, r.h)), 0);
+    return {
+      ...layout,
+      schedule: schedule.sequence,
+      fenceChanges: schedule.changes,
+      cutCount: layout.cuts.length,
+      scrapArea,
+      kerfArea,
+      wasteArea: scrapArea + kerfArea,
+      offcuts,
+      scrapRects,
+      offcutCount: offcuts.length,
+      largestOffcut,
+      matchedParts: stats.matchedParts,
+      unmatchedParts: stats.unmatchedParts,
+      batchCount: stats.batchCount,
+      largestBatch: stats.largestBatch,
+      averageBatch: stats.averageBatch,
+      typeSpread,
+      repeatedSheets,
+      distinctPatterns: patterns.size,
+      longestOffcutSide,
+      timeSeconds: layout.cuts.length * cutSeconds + schedule.changes * changeSeconds
+    };
+  }
+
+  /* ----------------------------------------------------------------- trial */
+
+  function orderItems(items, rng, trial) {
+    const ordered = items.map(item => ({...item, jitter: rng()}));
+    const mode = trial % 5;
+    ordered.sort((a, b) => {
+      const aLong = Math.max(a.pw, a.ph), bLong = Math.max(b.pw, b.ph);
+      if (mode === 0) return b.area - a.area || b.count - a.count || a.jitter - b.jitter;
+      if (mode === 1) return b.count - a.count || b.area - a.area || a.jitter - b.jitter;
+      if (mode === 2) return bLong - aLong || b.area - a.area || a.jitter - b.jitter;
+      if (mode === 3) return a.typeIndex - b.typeIndex || a.jitter - b.jitter;
+      return (b.area * (.82 + b.jitter * .36)) - (a.area * (.82 + a.jitter * .36));
+    });
+    return ordered;
+  }
+
+  /* Place the same blank in the same spot on other sheets so whole sheets
+     repeat: one setup covers several sheets at the saw. */
+  function cloneToOtherSheets(layout, queue, item, pick, spot) {
+    for (let pass = 0; pass < layout.sheets.length; pass++) {
+      const index = queue.findIndex(q => q.kind === item.kind && q.typeIndex === item.typeIndex &&
+        q.count === item.count && (q.kind !== 'strip' || q.lens.join() === item.lens.join()));
+      if (index < 0) return;
+      const freeIndex = layout.free.findIndex(r => r.sheet !== spot.sheet &&
+        Math.abs(r.x - spot.x) <= EPS && Math.abs(r.y - spot.y) <= EPS &&
+        dimFits(r.w, pick.shape.bw) && dimFits(r.h, pick.shape.bh));
+      if (freeIndex < 0) return;
+      const twinItem = queue.splice(index, 1)[0];
+      const rect = layout.free[freeIndex];
+      spot = {x: rect.x, y: rect.y, sheet: rect.sheet};
+      applyPlacement(layout, twinItem, {freeIndex, order: pick.order, shape: pick.shape});
+    }
+  }
+
+  function attemptPack(items, sheetCount, firstCuts, rng, twin, openCount = 0) {
+    const layout = newLayout(sheetCount, firstCuts, openCount);
+    const dimensionUse = new Map();
+    items.forEach(item => {
+      batchShapes(item).forEach(shape => {
+        [shape.pw, shape.ph, shape.bw, shape.bh].forEach(v =>
+          dimensionUse.set(keyInches(v), (dimensionUse.get(keyInches(v)) || 0) + 1));
+      });
+    });
+    const twinning = twin;
+    let nextId = items.length ? Math.max(...items.map(i => i.id)) + 1 : 1;
+    let guard = 0;
+    /* [index] long parts go first, onto the open sheets, before any breakdown cut */
+    const phases = [items.filter(isLongItem), items.filter(item => !isLongItem(item))];
+    for (let phase = 0; phase < 2; phase++) {
+    const queue = phases[phase];
+    if (phase === 1) applyOpenBreakdowns(layout);
+    while (queue.length) {
+      if (guard++ > 400) return null;
+      const item = queue.shift();
+      const options = placementOptions(layout, item, rng, dimensionUse);
+      if (!options.length) {
+        /* the run is too big for what is left: split it and keep going,
+           so batching never costs a sheet */
+        if (item.count < 2) return null;
+        const half = Math.ceil(item.count / 2);
+        const split = (list, id) => item.kind === 'strip' ? makeStrip(item.width, list, id) : makeItem(list, id);
+        queue.unshift(split(item.sources.slice(0, half), item.id), split(item.sources.slice(half), nextId++));
+        continue;
+      }
+      const top = options.slice(0, Math.min(4, options.length));
+      const pick = top[Math.floor(Math.pow(rng(), 2) * top.length)];
+      const anchor = layout.free[pick.freeIndex];
+      const spot = {x: anchor.x, y: anchor.y, sheet: anchor.sheet};
+      applyPlacement(layout, item, pick);
+      if (twinning) cloneToOtherSheets(layout, queue, item, pick, spot);
+    }
+    }
+    return layout;
+  }
+
+  function buildTrial(parts, sheetCount, firstOptions, rng, trial, cutSeconds, changeSeconds, scheduleAttempts = 6, openCount = 0) {
+    const firstCuts = [];
+    /* A shared first cut across every sheet keeps the breakdown in one fence
+       run, so try that on most trials and mixed settings on the rest. */
+    const uniform = trial < 2 || trial % 3 !== 2;
+    const shared = firstOptions[Math.floor(rng() * firstOptions.length)];
+    for (let s = 0; s < sheetCount; s++) {
+      if (trial === 0) firstCuts.push(36);
+      else if (trial === 1) firstCuts.push(48);
+      else if (uniform) firstCuts.push(shared);
+      else firstCuts.push(firstOptions[Math.floor(rng() * firstOptions.length)]);
+    }
+    /* Larger runs first; attemptPack splits a run only when the space left
+       cannot take it whole, so batching never costs a sheet. */
+    let plan = makeBatchPlan(parts, trial, rng);
+    const twin = trial % 3 !== 1;
+    let layout = attemptPack(orderItems(plan, rng, trial), sheetCount, firstCuts, rng, twin, openCount);
+    if (!layout) {
+      plan = degradePlan(plan);
+      if (plan) layout = attemptPack(orderItems(plan, rng, trial), sheetCount, firstCuts, rng, twin, openCount);
+    }
+    if (!layout) return null;
+    const partArea = parts.reduce((sum, p) => sum + p.area, 0);
+    return evaluateLayout(layout, partArea, cutSeconds, changeSeconds, rng, scheduleAttempts);
+  }
+
+  /* -------------------------------------------------------------- validate */
+
+  function overlaps(a, b) {
+    return a.x < b.x + b.w - EPS && b.x < a.x + a.w - EPS &&
+           a.y < b.y + b.h - EPS && b.y < a.y + a.h - EPS;
+  }
+
+  function guillotineSeparable(rects, depth) {
+    if (rects.length <= 1) return true;
+    if (depth > 60) return false;
+    const lines = [];
+    rects.forEach(r => { lines.push(['x', r.x + r.w]); lines.push(['y', r.y + r.h]); });
+    for (const [axis, value] of lines) {
+      const lowKey = axis === 'x' ? 'x' : 'y';
+      const sizeKey = axis === 'x' ? 'w' : 'h';
+      const low = rects.filter(r => r[lowKey] + r[sizeKey] <= value + EPS);
+      const high = rects.filter(r => r[lowKey] >= value - EPS);
+      if (!low.length || !high.length || low.length + high.length !== rects.length) continue;
+      if (guillotineSeparable(low, depth + 1) && guillotineSeparable(high, depth + 1)) return true;
+    }
+    return false;
+  }
+
+  function validateCandidate(candidate, parts) {
+    const issues = [];
+    const placements = candidate.sheets.flatMap(s => s.placements.map(p => ({...p, sheet: s.index})));
+    if (placements.length !== parts.length) issues.push(`${placements.length} of ${parts.length} pieces placed`);
+    const seen = new Set();
+    placements.forEach(p => {
+      const key = `${p.typeIndex}:${p.instance}`;
+      if (seen.has(key)) issues.push(`duplicate piece ${p.name} #${p.instance}`);
+      seen.add(key);
+    });
+    candidate.sheets.forEach(sheet => {
+      if (sheet.firstCut < FIRST_MIN - EPS || sheet.firstCut > FIRST_MAX + EPS)
+        issues.push(`sheet ${sheet.index + 1} first cut out of range`);
+      const free = candidate.free.filter(r => r.sheet === sheet.index);
+      const all = [...sheet.placements, ...free];
+      all.forEach(r => {
+        if (r.x < -EPS || r.y < -EPS || r.x + r.w > SHEET_W + EPS || r.y + r.h > SHEET_L + EPS)
+          issues.push(`sheet ${sheet.index + 1}: rectangle off the sheet`);
+        if (r.x >= (sheet.open ? sheet.breakX : 0) - EPS && r.y + r.h > sheet.firstCut + EPS && r.y < sheet.firstCut - EPS)
+          issues.push(`sheet ${sheet.index + 1}: rectangle straddles the first cut`);
+      });
+      for (let i = 0; i < all.length; i++) {
+        for (let j = i + 1; j < all.length; j++) {
+          if (overlaps(all[i], all[j])) issues.push(`sheet ${sheet.index + 1}: overlapping rectangles`);
+        }
+      }
+      if (!guillotineSeparable(all, 0)) issues.push(`sheet ${sheet.index + 1}: layout is not guillotine-separable`);
+    });
+    /* batch integrity: same type, same orientation, kerf-tight grid, no scrap inside */
+    const batches = new Map();
+    placements.forEach(p => {
+      if (!batches.has(p.batchId)) batches.set(p.batchId, []);
+      batches.get(p.batchId).push(p);
+    });
+    batches.forEach((members, id) => {
+      const first = members[0];
+      if (members.length !== first.batchSize) issues.push(`batch ${id}: member count mismatch`);
+      if (first.batchKind === 'strip') {
+        const axis = first.batchAxis;
+        const cross = axis === 'y' ? 'w' : 'h';
+        const along = axis === 'y' ? 'y' : 'x';
+        const size = axis === 'y' ? 'h' : 'w';
+        const sorted = members.slice().sort((a, b) => a[along] - b[along]);
+        let cursor = axis === 'y' ? first.batchY : first.batchX;
+        sorted.forEach(m => {
+          if (m.sheet !== first.sheet) issues.push(`batch ${id}: split across sheets`);
+          if (Math.abs(m[cross] - first[cross]) > EPS) issues.push(`batch ${id}: strip members differ in width`);
+          if (Math.abs(m[along] - cursor) > EPS) issues.push(`batch ${id}: strip members not kerf-tight`);
+          cursor += m[size] + KERF;
+        });
+      } else members.forEach(m => {
+        if (m.typeIndex !== first.typeIndex) issues.push(`batch ${id}: mixed part types`);
+        if (Math.abs(m.w - first.w) > EPS || Math.abs(m.h - first.h) > EPS) issues.push(`batch ${id}: mixed orientation`);
+        if (m.sheet !== first.sheet) issues.push(`batch ${id}: split across sheets`);
+        const c = Math.round((m.x - first.batchX) / (first.w + KERF));
+        const r = Math.round((m.y - first.batchY) / (first.h + KERF));
+        if (Math.abs(first.batchX + c * (first.w + KERF) - m.x) > EPS ||
+            Math.abs(first.batchY + r * (first.h + KERF) - m.y) > EPS)
+          issues.push(`batch ${id}: member not on the kerf-tight grid`);
+      });
+      const blank = {x: first.batchX, y: first.batchY, w: first.batchW, h: first.batchH, sheet: first.sheet};
+      candidate.free.forEach(f => {
+        if (f.sheet === blank.sheet && overlaps(f, blank)) issues.push(`batch ${id}: remnant inside the parent blank`);
+      });
+      const covered = members.reduce((sum, m) => sum + m.w * m.h, 0);
+      const kerfInside = blank.w * blank.h - covered;
+      const expected = first.batchKind === 'strip'
+        ? (members.length - 1) * KERF * (first.batchAxis === 'y' ? blank.w : blank.h)
+        : (first.batchCols - 1) * KERF * blank.h + (first.batchRows - 1) * KERF * first.w * first.batchCols;
+      if (Math.abs(kerfInside - expected) > 0.01) issues.push(`batch ${id}: unaccounted space inside the blank`);
+    });
+    const ids = new Set(candidate.cuts.map(c => c.id));
+    candidate.cuts.forEach(c => {
+      if (c.parent != null && !ids.has(c.parent)) issues.push(`cut ${c.id}: missing dependency`);
+      if (c.setting > Math.max(c.rectW, c.rectH) + EPS) issues.push(`cut ${c.id}: setting exceeds the panel`);
+    });
+    if (candidate.schedule.length !== candidate.cuts.length) issues.push('schedule does not cover every cut');
+    return {ok: !issues.length, issues: [...new Set(issues)]};
+  }
+
+  /* ----------------------------------------------------------------- pools */
+
+  function dominates(a, b) {
+    const av = [a.wasteArea, a.cutCount, a.fenceChanges, a.unmatchedParts, a.typeSpread, a.offcutCount, -a.largestOffcut];
+    const bv = [b.wasteArea, b.cutCount, b.fenceChanges, b.unmatchedParts, b.typeSpread, b.offcutCount, -b.largestOffcut];
+    return av.every((v, i) => v <= bv[i] + EPS) && av.some((v, i) => v < bv[i] - EPS);
+  }
+
+  function balancedRaw(c) {
+    return c.wasteArea * .08 + c.cutCount * 2 + c.fenceChanges * 8 + c.unmatchedParts * 5 + c.typeSpread * 6 + c.offcutCount * 3 - c.repeatedSheets * 14 - c.longestOffcutSide * .12 - c.largestOffcut * .003;
+  }
+
+  function addToPool(pool, candidate) {
+    if (!candidate) return pool;
+    const signature = candidate.sheets.map(s => formatInches(s.firstCut)).join('|') + ':' + candidate.cutCount + ':' +
+      candidate.fenceChanges + ':' + candidate.wasteArea.toFixed(1) + ':' + candidate.unmatchedParts + ':' + candidate.typeSpread + ':' + candidate.repeatedSheets;
+    if (pool.some(p => p.signature === signature)) return pool;
+    candidate.signature = signature;
+    if (pool.some(p => dominates(p, candidate))) return pool;
+    pool = pool.filter(p => !dominates(candidate, p));
+    pool.push(candidate);
+    if (pool.length > 70) {
+      pool.sort((a, b) => balancedRaw(a) - balancedRaw(b));
+      pool.length = 70;
+    }
+    return pool;
+  }
+
+  function normalizedBest(pool, keys) {
+    const ranges = {};
+    keys.forEach(k => {
+      const vals = pool.map(c => typeof k === 'function' ? k(c) : c[k]);
+      ranges[String(k)] = {min: Math.min(...vals), max: Math.max(...vals)};
+    });
+    return pool.reduce((best, c) => {
+      const score = keys.reduce((sum, k) => {
+        const v = typeof k === 'function' ? k(c) : c[k];
+        const r = ranges[String(k)];
+        return sum + (r.max - r.min < EPS ? 0 : (v - r.min) / (r.max - r.min));
+      }, 0);
+      return !best || score < best.score ? {candidate: c, score} : best;
+    }, null).candidate;
+  }
+
+  function uniqueCandidates(minPool, extraPool, substantialSeconds) {
+    const out = [];
+    const push = (label, candidate, note) => {
+      if (!candidate || out.some(x => x.candidate.signature === candidate.signature &&
+        x.candidate.sheets.length === candidate.sheets.length)) return;
+      out.push({label, candidate, note});
+    };
+    const balanced = normalizedBest(minPool, ['wasteArea', 'cutCount', 'fenceChanges', 'unmatchedParts', 'typeSpread', 'offcutCount', c => -c.largestOffcut, c => -c.repeatedSheets, c => -c.longestOffcutSide]);
+    push(balanced.unmatchedParts === 0 ? 'Balanced · fully batched' : 'Balanced', balanced, 'Minimum-sheet compromise');
+    push('Grouped by part', [...minPool].sort((a, b) =>
+      a.typeSpread - b.typeSpread || a.unmatchedParts - b.unmatchedParts || a.cutCount - b.cutCount)[0], 'Each part type kept on as few sheets as possible');
+    push('Repeat sheets', [...minPool].sort((a, b) =>
+      b.repeatedSheets - a.repeatedSheets || a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Identical sheets cut from one setup');
+    push('Least scrap', [...minPool].sort((a, b) => a.wasteArea - b.wasteArea || a.timeSeconds - b.timeSeconds)[0], 'Lowest unusable waste');
+    push('Fewest cuts', [...minPool].sort((a, b) => a.cutCount - b.cutCount || a.fenceChanges - b.fenceChanges)[0], 'Shortest cut count');
+    push('Fewest changes', [...minPool].sort((a, b) => a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Most repeated settings');
+    push('Biggest batches', [...minPool].sort((a, b) =>
+      a.unmatchedParts - b.unmatchedParts || b.largestBatch - a.largestBatch ||
+      b.averageBatch - a.averageBatch || a.cutCount - b.cutCount)[0], 'Longest common cutting runs');
+    push('Best offcuts', [...minPool].sort((a, b) => a.offcutCount - b.offcutCount || b.largestOffcut - a.largestOffcut || a.wasteArea - b.wasteArea)[0], 'Consolidated remnants');
+    if (extraPool.length) {
+      const fastest = [...extraPool].sort((a, b) => a.timeSeconds - b.timeSeconds || a.wasteArea - b.wasteArea)[0];
+      const savings = balanced.timeSeconds - fastest.timeSeconds;
+      if (savings >= substantialSeconds) push('+1 sheet: faster', fastest, `${formatDuration(savings)} estimated savings`);
+      else push('+1 sheet comparison', fastest, `${formatDuration(Math.max(0, savings))} estimated savings`);
+    }
+    return out;
+  }
+
+  function formatDuration(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return minutes ? `${minutes}m ${secs}s` : `${secs}s`;
+  }
+
+  /* ---------------------------------------------------------------- index */
+
+  /* [index] Nest one material's parts ({id, L, S, name}, every one fits the sheet) and
+     hand back the v2 "Balanced" layout in the cut map's placement format. Identical
+     parts (same name and size) are one v2 part type, so they batch together. */
+  function nest(parts, trials) {
+    const types = new Map();
+    parts.forEach(p => {
+      const key = p.name + '|' + keyInches(p.L) + '|' + keyInches(p.S);
+      if (!types.has(key)) types.set(key, []);
+      types.get(key).push(p);
+    });
+    const v2parts = [];
+    [...types.values()].forEach((list, typeIndex) => list.forEach((p, i) => v2parts.push({
+      name: p.name, w: p.S, h: p.L, color: '', typeIndex, instance: i + 1, area: p.L * p.S, id: p.id
+    })));
+
+    /* Sheets that must carry a long part: first-fit decreasing on the rip widths, since
+       two parts longer than a half sheet can only sit side by side. */
+    const bins = [];
+    v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.w).sort((a, b) => b - a).forEach(w => {
+      const i = bins.findIndex(b => b + KERF + w <= SHEET_W + EPS);
+      if (i < 0) bins.push(w); else bins[i] += KERF + w;
+    });
+    const openCount = bins.length;
+
+    const area = v2parts.reduce((sum, p) => sum + p.area, 0);
+    const minimum = Math.max(1, openCount, Math.ceil(area / (SHEET_W * SHEET_L)));
+    const firstOptions = candidateFirstCuts(v2parts);
+    const rng = makeRng(13579);
+    let pool = [];
+    let sheetCount = minimum;
+    /* v2's search: `trials` at the area minimum, then the extra-sheet pass. The area bound
+       is not always reachable, so keep adding a sheet until a layout is found. */
+    for (; sheetCount <= minimum + 4; sheetCount++) {
+      const first = sheetCount === minimum;
+      const n = first ? trials : Math.max(500, Math.ceil(trials * .35));
+      for (let trial = 0; trial < n; trial++)
+        pool = addToPool(pool, buildTrial(v2parts, sheetCount, firstOptions, rng, trial, 12, 45, first ? 6 : 2, openCount));
+      if (pool.length) break;
+    }
+    const pick = pool.length ? uniqueCandidates(pool, [], 0).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
+    if (!pick) throw new Error('no valid sheet layout found');
+
+    const c = pick.candidate;
+    const idOf = new Map(v2parts.map(p => [p.typeIndex + ':' + p.instance, p.id]));
+    const sheets = c.sheets.map(sheet => {
+      const out = sheet.placements.map(p => ({
+        name: p.name, id: idOf.get(p.typeIndex + ':' + p.instance), x: p.x, y: p.y, w: p.w, h: p.h, kind: 'part',
+        batchId: p.batchId, batchSize: p.batchSize, batchRows: p.batchRows, batchCols: p.batchCols, batchKind: p.batchKind,
+        batchX: p.batchX, batchY: p.batchY, batchW: p.batchW, batchH: p.batchH
+      }));
+      c.free.filter(r => r.sheet === sheet.index).forEach(r =>
+        out.push({name: '', x: r.x, y: r.y, w: r.w, h: r.h, kind: 'offcut', tier: tier(r.w, r.h)}));
+      const bx = sheet.open ? sheet.breakX : 0;
+      if (bx < SHEET_W - EPS)
+        out.push({name: 'mid-cut-barrier', x: bx, y: sheet.firstCut, w: SHEET_W - bx, h: KERF, kind: 'cut-line'});
+      return out;
+    });
+    const longNames = [...new Set(v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.name))];
+    return {
+      sheets, label: pick.label, longNames,
+      openSheets: c.sheets.filter(s => s.placements.some(p => Math.max(p.w, p.h) > halfMax() + EPS)).length,
+      metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges, batches: c.batchCount, matchedParts: c.matchedParts,
+        unmatchedParts: c.unmatchedParts, repeatedSheets: c.repeatedSheets, wasteArea: c.wasteArea,
+        scrapArea: c.scrapArea, kerfArea: c.kerfArea}
+    };
+  }
+
+  return {nest, buildTrial, addToPool, uniqueCandidates, validateCandidate, candidateFirstCuts, makeRng, halfMax};
+})();
+
+function packMaterial(material,matParts,stockOffcuts){
   const fittable=matParts.filter(p=>orient(p.L,p.S,SHEET_W,SHEET_L,'yield')!==null);
   const oversize=matParts.filter(p=>orient(p.L,p.S,SHEET_W,SHEET_L,'yield')===null);
   let remaining=[...fittable];
@@ -1658,37 +1991,25 @@ function packMaterial(material,matParts,stockOffcuts,budget){
       remaining=remaining.filter(p=>!done.has(p.id));
     }
   }
-  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize];
+  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
   if(remaining.length){
-    const res=chooseLayout(remaining,material,budget);
-    if(res){
-      strategy=res.name;
-      const tightened=retightenCuts(res.sheets,material);
-      sheets=cmpArr(layoutKey(layoutMetrics(tightened)),layoutKey(layoutMetrics(res.sheets)))<=0
-        ? tightened : res.sheets;
-      for(const sh of sheets){
-        if(!sh.some(p=>p.kind==='cut-line')){
-          const prs=sh.filter(p=>p.kind==='part').map(p=>[p.x,p.y,p.w,p.h]);
-          const y0=centerCut(prs,SHEET_L);
-          if(y0!=null){
-            const cut=applyMidCut(sh,y0,material);
-            sh.splice(0,sh.length,...cut);
-          }
-        }
-      }
-      metrics=layoutMetrics(sheets);
-      newOffcuts.push(...loggedOffcuts(sheets,material));
-    }else unplaced.push(...remaining);
+    const res=CUTOPT.nest(remaining,cutTrials(remaining.length));
+    ({sheets,metrics,openSheets,longNames}=res);
+    strategy=res.label;
+    for(const sh of sheets) for(const p of sh)
+      if(p.kind==='offcut'&&p.tier==='inventory')
+        newOffcuts.push({material,l:r4(Math.max(p.w,p.h)),w:r4(Math.min(p.w,p.h))});
   }
   const panels=sheets.map((sh,i)=>({placements:sh,w:SHEET_W,l:SHEET_L,label:`Sheet ${i+1}/${sheets.length}`}))
     .concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
-  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize,unplaced};
+  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize,unplaced,
+          openSheets,longNames};
 }
 
 /* ---- boards ----
    Rails and stiles that can't come off a 2" stick are nested onto the boards on the
    rack. A board is crosscut into lengths first — Tyler can't rip longer than 5ft —
-   and each piece is then packed with the same guillotine columns the sheets use. */
+   and each piece is then packed with the same guillotine columns the rack offcuts use. */
 const RIP_MAX=60;
 /* Boards follow their own rules, not the sheet ones. A leftover narrower than 2" or
    shorter than a foot is scrap, and the packer is scored on how little of that it
@@ -3660,6 +3981,10 @@ function build(){
           warns.push(g.label+': '+(o.name||'a part')+' at '+fmt(o.L)+'" \u00d7 '+fmt(o.S)+
             '" could not be placed on '+m.material+', so it is not on any cut map.');
         }
+        for(const m of g.nest.materials) if(m.openSheets)
+          warns.push(g.label+': '+m.longNames.join(', ')+' '+(m.longNames.length>1?'are':'is')+
+            ' longer than a half sheet, so '+m.openSheets+' '+m.material+' sheet'+(m.openSheets>1?'s are':' is')+
+            ' ripped full length first and broken down after. '+(m.openSheets>1?'Those sheets go':'That sheet goes')+' on the saw whole.');
       }catch(e){
         console.error(e); unplaced.push(...g.sheetParts);
         warns.push(g.label+': nesting failed, so this result and its estimate are incomplete.');
@@ -3707,11 +4032,10 @@ function runNesting(parts,cfg,stock){
   const out=[];
   for(const m of mats){
     const mine=flat.filter(p=>p.material===m);
-    const budget=new Set(mine.map(p=>r4(p.L)+'|'+r4(p.S))).size<=4?'full':'fast';
     const md=matOf(m);
     SHEET_L=md&&md.l>0?md.l:96;
     SHEET_W=md&&md.w>0?md.w:48;
-    out.push(packMaterial(m,mine,stock,budget));
+    out.push(packMaterial(m,mine,stock));
   }
   SHEET_L=96; SHEET_W=48;
   return {materials:out,banked:out.flatMap(r=>r.newOffcuts),
@@ -3903,15 +4227,16 @@ function viewMap(body,sum,g){
       :'');
   let h='';
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Est. cuts / setups</th><th>Strategy</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
     for(const m of N.materials)
       h+='<tr><td>'+m.material+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
-        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.settings:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
+        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
     h+='</tbody></table></div>';
     h+='<div class="legend" style="margin-top:14px"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>offcut, keep &amp; log</span>'+
       '<span><i style="background:#ececec;border-color:#b0b0b0"></i>scrap</span>'+
       '<span><i style="background:#f7d6d6;border-color:#d99999"></i>trash</span>'+
-      '<span><i style="background:#fff;border-color:#d33"></i>red dash = breakdown cut</span></div>';
+      '<span><i style="background:#fff;border-color:#d33"></i>red dash = breakdown cut</span>'+
+      '<span><i style="background:#fff;border-color:#7b2f8c"></i>purple = batch blank, cut out whole then broken down</span></div>';
     for(const m of N.materials){
       const sm=matOf(m.material), size=sm?fmt(sm.w)+'"×'+fmt(sm.l)+'"':'';
       h+='<h3 style="font-size:13px;margin:14px 0 8px">'+m.material+' — '+m.sheets+' sheet(s) '+size+
@@ -4058,11 +4383,29 @@ function sheetSVG(panel,board){
       if(ph>48) e+='<text x="'+(px+12).toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="9.5" fill="#555" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 '+(px+12).toFixed(1)+' '+cy.toFixed(1)+')">'+fmt(pl.h)+'"</text>';
     }
   }
+  /* One outline per v2 batch: the parent blank that is cut out whole and then broken
+     down with repeated settings. The tag sits in the bottom-left corner, clear of the
+     part dimensions, and is left off a blank too narrow to hold it. */
+  const blanks=new Set();
+  for(const pl of panel.placements){
+    if(pl.kind!=='part'||!(pl.batchSize>1)||blanks.has(pl.batchId)) continue;
+    blanks.add(pl.batchId);
+    const bx=M+pl.batchX*S, by=TOP+pl.batchY*S, bw=pl.batchW*S, bh=pl.batchH*S;
+    e+='<rect x="'+bx.toFixed(1)+'" y="'+by.toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+
+      '" fill="none" stroke="#7b2f8c" stroke-width="2.2"/>';
+    const tag='\u00d7'+pl.batchSize+(pl.batchKind==='strip'?' strip':' ('+pl.batchRows+'\u00d7'+pl.batchCols+')');
+    const tw=tag.length*5.8+6, ty=by+bh-12;
+    if(bw>=tw&&bh>=14)
+      e+='<rect x="'+bx.toFixed(1)+'" y="'+ty.toFixed(1)+'" width="'+tw.toFixed(1)+'" height="12" fill="#7b2f8c"/>'+
+        '<text x="'+(bx+3).toFixed(1)+'" y="'+(ty+9).toFixed(1)+'" font-size="9" font-weight="bold" fill="#fff">'+tag+'</text>';
+  }
   const cut=panel.placements.filter(p=>p.kind==='cut-line');
   if(cut.length){
-    const ly=TOP+cut[0].y*S;
-    e+='<line x1="'+M+'" y1="'+ly.toFixed(1)+'" x2="'+(M+W)+'" y2="'+ly.toFixed(1)+'" stroke="#d33" stroke-width="1.8" stroke-dasharray="8 4"/>';
-    e+='<text x="'+(M-5)+'" y="'+(ly+3).toFixed(1)+'" font-size="11" fill="#d33" font-weight="bold" text-anchor="end">'+fmt(cut[0].y)+'"</text>';
+    const ly=TOP+cut[0].y*S, lx=M+cut[0].x*S, lx2=lx+cut[0].w*S;
+    e+='<line x1="'+lx.toFixed(1)+'" y1="'+ly.toFixed(1)+'" x2="'+lx2.toFixed(1)+'" y2="'+ly.toFixed(1)+'" stroke="#d33" stroke-width="1.8" stroke-dasharray="8 4"/>';
+    /* v2 breakdown settings run to 32nds, so the label shrinks to stay inside the margin. */
+    const ct=fmt(cut[0].y)+'"', cfs=Math.min(11,(M-8)/(ct.length*0.6));
+    e+='<text x="'+(M-5)+'" y="'+(ly+3).toFixed(1)+'" font-size="'+cfs.toFixed(1)+'" fill="#d33" font-weight="bold" text-anchor="end">'+ct+'</text>';
   }
   if(board){
     const x0=M, x1=M+W, y0=TOP, y1=TOP+H, dl=M-13, mid=(y0+y1)/2;
