@@ -167,7 +167,7 @@ input[inputmode]{font-variant-numeric:tabular-nums}
   transform:translateY(14px);transition:transform .16s;max-height:82vh;overflow-y:auto}
 .sheetback.in .sheet{transform:translateY(0)}
 .sheeth{font-size:17px;font-weight:650;margin-bottom:4px}
-.sheetm{font-size:13px;color:var(--ink-2);line-height:1.45;margin-bottom:10px}
+.sheetm{font-size:13px;color:var(--ink-2);line-height:1.45;margin-bottom:10px;white-space:pre-line}
 .sheetin{width:100%;font-size:16px;padding:11px 10px;border:1px solid var(--line-hard);
   border-radius:9px;margin:6px 0 4px}
 .sheetlist{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px}
@@ -265,6 +265,12 @@ button{font:inherit;font-weight:650;border-radius:8px;border:1px solid transpare
 .tab{flex:1;min-width:78px;text-align:center;padding:9px 6px;border:1px solid var(--line-hard);
   border-radius:8px;background:#fff;font-size:12.5px;font-weight:650;color:var(--ink-2);white-space:nowrap}
 .tab.sel{background:var(--blue);color:#fff;border-color:var(--blue)}
+.tabs.grouped{display:block;overflow:visible}
+.secs{display:flex;gap:3px;padding:3px;background:#fff;border:1px solid var(--line-hard);border-radius:10px;margin-bottom:8px}
+.sec{flex:1;padding:9px 4px;border:none;border-radius:7px;background:transparent;color:var(--ink-2);font-size:14px;font-weight:650}
+.sec.sel{background:var(--blue-deep);color:#fff}
+.subtabs{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.subtabs .tab{flex:0 0 auto;min-width:0;padding:7px 12px}
 table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
 th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
   border-bottom:2px solid var(--ink);padding:6px 5px}
@@ -274,6 +280,25 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .tblwrap{overflow-x:auto}
 .summary{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;font-size:12px;color:var(--ink-2)}
 .summary b{display:block;font-size:17px;color:var(--ink);font-variant-numeric:tabular-nums}
+.fieldbad{border-color:var(--red)!important;outline:2px solid var(--red)!important;outline-offset:-1px;
+  background:#fdf1f1!important}
+.fielderr{font-size:11px;color:var(--red);margin-top:3px;line-height:1.3}
+.scopetag{display:inline-block;margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;padding:2px 7px;border-radius:9px;vertical-align:1px;
+  border:1px solid var(--blue);color:var(--blue-deep);background:#eef6fb}
+.scopetag.shop,.scopetag.master{border-color:#e0b978;color:#7a4d0d;background:#fff8ee}
+.quotebox{border:1px solid var(--line-hard);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:#fff}
+.quotebox.locked{border-color:var(--blue);background:#f3f8fc}
+.quotebox .qtext{font-size:13px;line-height:1.45;color:var(--ink)}
+.quotebox .tblwrap{margin-top:8px}
+.qbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+#printPack .qbtns,#printPack .searchbar{display:none}
+.searchbar{border:1px solid var(--line-hard);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:#fff}
+.searchbar .stext{font-size:13px;line-height:1.45}
+.sbar{height:5px;border-radius:3px;background:var(--sky);margin-top:8px;overflow:hidden}
+.sbar i{display:block;height:100%;background:var(--blue);transition:width .3s}
+.warnbtn{display:inline-block;margin-top:6px;padding:5px 10px;font-size:12px;border-radius:7px;
+  background:#fff;color:#7a4d0d;border:1px solid #e0b978}
 .warn{background:#fdf3e3;border:1px solid #e0b978;color:#7a4d0d;border-radius:8px;padding:9px 11px;
   font-size:12.5px;margin-bottom:10px;line-height:1.45}
 .toast{position:fixed;left:12px;right:12px;bottom:88px;z-index:80;background:var(--red);color:#fff;
@@ -373,7 +398,7 @@ body.printing #printPack{display:block}
   border-bottom:2px solid #0f3a57;padding-bottom:5px;margin:0 0 10px}
 @media print{
   header,.actions,.tabs,#builder,.hint,.btn-ghost,#assumpCard,
-  #matCard,#priceCard,#timeCard,#projBar,.toast,.printbar{display:none!important}
+  #matCard,#priceCard,#timeCard,#projBar,.toast,.printbar,.warnbtn,.qbtns,.searchbar{display:none!important}
   #printPack{display:block!important}
   body.printing #results{display:none!important}
   body{background:#fff;font-size:11pt}
@@ -415,8 +440,8 @@ body.printing .wrap{padding-bottom:120px}
 </style>
 </head>
 <body>
-<!-- Version: bump the last number by 1 on every change that ships (v1.10, v1.11, v1.12, ...). -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.13</span><span class="sub">Bluebird Woodworking</span></header>
+<!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
+<header><h1>Cabinet Planner</h1><span class="ver">v1.25</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -513,7 +538,7 @@ body.printing .wrap{padding-bottom:120px}
   </div>
 
   <div class="card">
-    <h2>Job settings</h2>
+    <h2>Job settings <span class="scopetag" data-scope="project"></span></h2>
     <div class="grid g2" style="margin-bottom:8px">
       <div><label>Drawer boxes</label><select id="drawer_phase">
         <option value="now">With the carcasses</option>
@@ -550,9 +575,9 @@ body.printing .wrap{padding-bottom:120px}
 
   <div class="card" id="matCard">
     <details class="cfg" id="matBox">
-      <summary>Materials</summary>
+      <summary>Materials <span class="scopetag" data-scope="shop"></span></summary>
       <div class="cfgbody">
-        <div class="fieldnote" style="margin:0 0 10px">Materials are <b>shop-wide</b> &mdash; one list shared by every project, not part of this job. A change here changes every project at once, and Cancel in the shop defaults editor will not undo it. Sizes set here are what the cut maps nest against; thickness is what part sizes and board feet are figured on. Prices live under <b>Price defaults</b>.</div>
+        <div class="fieldnote" style="margin:0 0 10px">Materials are <b>shop-wide</b> &mdash; one list shared by every project, not part of this job. A change here changes every project at once, and Cancel in the shop defaults editor will not undo it. Sizes set here are what the cut maps nest against; thickness is what part sizes and board feet are figured on. Prices live under <b>Prices</b>.</div>
         <div id="ocMats"></div>
         <button class="btn-ghost btn-sm" id="ocAddMat" style="margin-top:10px">Add a material</button>
       </div>
@@ -561,7 +586,7 @@ body.printing .wrap{padding-bottom:120px}
 
   <div class="card" id="cfgCard">
     <details class="cfg" id="cfgBox">
-      <summary>Shop defaults</summary>
+      <summary><span data-name-project="Project construction" data-name-master="Dimensions &amp; construction">Project construction</span> <span class="scopetag" data-scope="project"></span></summary>
       <div class="cfgbody">
 
         <div class="cfgsec">Plywood &amp; saw</div>
@@ -630,7 +655,7 @@ body.printing .wrap{padding-bottom:120px}
         </div>
         <div class="fieldnote" style="margin-top:8px">A rung at every cabinet intersection and both ends, plus one at mid-span on any cabinet wider than the figure above. Rungs butt between the rails &mdash; no dados. Flat runners cap the rails so cabinet screws land in face grain; rails are cut shorter by the runner thickness so the base still finishes at the toe kick height.</div>
 
-        <div class="cfgsec">Face frame <span>2 x 3/4 poplar</span></div>
+        <div class="cfgsec">Face frame <span data-av="stick_name">2 x 3/4 poplar</span></div>
         <div class="grid g3">
           <div><label>Rail &amp; stile width</label><select id="face_frame_width"></select></div>
           <div><label>Cut from</label><select id="ff_stock"></select></div>
@@ -759,7 +784,7 @@ body.printing .wrap{padding-bottom:120px}
 
 <div class="card" id="timeCard">
     <details class="cfg" id="timeBox">
-      <summary>Time defaults</summary>
+      <summary>Task times <span class="scopetag" data-scope="project"></span></summary>
       <div class="cfgbody">
         <div class="cfgsec">Rates</div>
         <div class="grid g3">
@@ -777,7 +802,7 @@ body.printing .wrap{padding-bottom:120px}
 
   <div class="card" id="priceCard">
     <details class="cfg" id="priceBox">
-      <summary>Price defaults</summary>
+      <summary>Prices <span class="scopetag" data-scope="project"></span></summary>
       <div class="cfgbody">
         <div class="cfgsec">Material prices</div>
         <div id="priceRows"></div>
@@ -821,26 +846,26 @@ body.printing .wrap{padding-bottom:120px}
   <div class="card" id="assumpCard">
   <h2>How parts are figured</h2>
   <ul class="assump">
-    <li>Inside parts = cabinet width − width deduction (15/16"), so they land in the 1/4" dados.</li>
-    <li>Uppers: 2 sides, full-depth top &amp; bottom set in a dado 3/4" from each end, 2 stretchers, adjustable shelves.</li>
+    <li>Inside parts = cabinet width − width deduction (<span data-av="width_deduction">15/16"</span>), so they land in the <span data-av="carcass_dado_depth">1/4"</span> dados.</li>
+    <li>Uppers: 2 sides, full-depth top &amp; bottom set in a dado <span data-av="upper_panel_inset">3/4"</span> from each end, <span data-av="upper_stretcher_qty">2</span> stretchers, adjustable shelves.</li>
     <li>The upper back is dadoed on all four edges, so it is the internal opening plus a dado depth all round.</li>
     <li>The lower bottom runs the full cabinet depth, back panel or not.</li>
-    <li>Lowers: 2 sides on a separate toe-kick base, 1 bottom, and 3 stretchers &mdash; one at the top front, one at the top back, and a third on the back dropped below it.</li>
-    <li>A lower shelf is set back 1 1/4" when there's a back panel, or 1/4" when there isn't.</li>
+    <li>Lowers: 2 sides on a separate toe-kick base, 1 bottom, and <span data-av="lower_stretcher_qty">3</span> stretchers &mdash; one at the top front, one at the top back, and a third on the back dropped below it.</li>
+    <li>A lower shelf is set back <span data-av="lower_shelf_depth_back">1 1/4"</span> when there's a back panel, or <span data-av="lower_shelf_depth_noback">1/4"</span> when there isn't.</li>
     <li>Length is always the longer dimension, width the shorter.</li>
-    <li>Widths round to 1/8"; leftover becomes even scribe gaps at both walls.</li>
+    <li>Widths round to <span data-av="width_round">1/8"</span>; leftover becomes even scribe gaps at both walls.</li>
     <li>Every full sheet gets one breakdown crosscut between 36" and 60". A part longer than a half sheet (toe kick rails, long runners) is ripped off the whole sheet first, and the rest of that sheet is broken down after.</li>
     <li>Sheet layouts come from the Plywood Cut Optimizer v2 search. Identical parts are internally grouped to reuse fence settings, but the cut map leaves those working groups unmarked. Fewest sheets comes first: a sheet is only added when no layout at the lower count can be found.</li>
     <li>Offcuts 6" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
     <li>Drawer boxes: sides run the full depth, front and back dadoed into each side, bottom in a dado all round. Stock thicknesses come from the Plywood &amp; saw actuals.</li>
     <li>Box depth takes the back-panel offset off the cabinet depth, then rounds down to the longest slide on hand. Overlay fronts on a face frame gain the frame thickness back.</li>
     <li>On a face frame, the drawer opening is the cabinet width less one stile width, assuming the stile straddles the seam between neighbouring boxes.</li>
-    <li>Toe kick base: two rails on edge, a rung butted between them at both ends and every cabinet seam, plus one at mid-span on cabinets over 24", capped with two flat runners to screw into.</li>
+    <li>Toe kick base: two rails on edge, a rung butted between them at both ends and every cabinet seam, plus one at mid-span on cabinets over <span data-av="toe_kick_cross_span">24"</span>, capped with two flat runners to screw into.</li>
     <li>Face frame is one assembly per run: 2 end stiles, top and bottom rails, and a stile at every cabinet intersection.</li>
     <li>Face frame and door frames are solid lumber, so they are listed as linear footage and never nested on sheets.</li>
     <li>Shaker doors and drawer fronts: two stiles full height, two rails between them, panel captured in a dado all round.</li>
     <li>Rails run the opening plus both dados; the panel runs the opening plus both dados less the clearance.</li>
-    <li>Frames come from 2 x 3/4 poplar in 8 ft sticks, with their own cut map. Anything narrower than 2" is ripped and the offcut is marked.</li>
+    <li>Frames set to Sticks come from <span data-av="stick_name">2 x 3/4 poplar</span> sticks <span data-av="stock_length">96"</span> long, with their own cut map; frames set to Boards are milled from rough lumber. Anything narrower than <span data-av="stock_width">2"</span> is ripped and the offcut is marked.</li>
     <li>A face frame rail longer than one stick is glued from two pieces, jointed at a stile.</li>
     <li>A cabinet wider than the two-door figure can be split into two openings with a centre stile.</li>
   </ul>
@@ -867,7 +892,10 @@ body.printing .wrap{padding-bottom:120px}
   <button class="btn-ghost btn-sm" id="btnHome">Home</button>
   <button class="btn-ghost btn-sm" id="btnMenu">•••</button>
 </div>
-<script>
+<!-- v1.25: the nesting engine sits in its own script. The page runs it as before, and
+     the same text is handed to a background worker so a big job no longer freezes the
+     screen. Nothing in this block may touch the page. -->
+<script id="nest-engine">
 let KERF=0.125;
 /* The sheet being nested. Set per material before packing it, the same way KERF is,
    so a sheet that really is 49 x 97 nests as 49 x 97 rather than as a nominal 4x8. */
@@ -2068,7 +2096,7 @@ const CUTOPT=(()=>{
   /* [index] Nest one material's parts ({id, L, S, name}, every one fits the sheet) and
      hand back the v2 "Balanced" layout in the cut map's placement format. Identical
      parts (same name and size) are one v2 part type, so they batch together. */
-  function nest(parts, trials) {
+  function nest(parts, trials, seed = 13579) {
     const types = new Map();
     parts.forEach(p => {
       const key = p.name + '|' + keyInches(p.L) + '|' + keyInches(p.S);
@@ -2092,7 +2120,7 @@ const CUTOPT=(()=>{
     const area = v2parts.reduce((sum, p) => sum + p.area, 0);
     const minimum = Math.max(1, openCount, Math.ceil(area / (SHEET_W * SHEET_L)));
     const firstOptions = candidateFirstCuts(v2parts);
-    const rng = makeRng(13579);
+    const rng = makeRng(seed);   // [index] seed is 13579 unless Keep searching asks for another
     let pool = [];
     let sheetCount = minimum;
     /* v2's search: `trials` at the area minimum, then the extra-sheet pass. The area bound
@@ -2129,6 +2157,9 @@ const CUTOPT=(()=>{
     const longNames = [...new Set(v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.name))];
     return {
       sheets, label: pick.label, longNames,
+      /* [index] How Keep searching compares two layouts for the same parts: fewer sheets,
+         then the engine's own balanced score (lower is better). */
+      score: {sheets: c.sheets.length, raw: balancedRaw(c)},
       openSheets: c.sheets.filter(s => s.placements.some(p => Math.max(p.w, p.h) > halfMax() + EPS)).length,
       metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges}
     };
@@ -2136,6 +2167,178 @@ const CUTOPT=(()=>{
 
   return {nest};
 })();
+</script>
+<script>
+/* ================= background nesting (v1.25) =================
+   The sheet search can run for seconds on a phone. It now runs in a worker built from
+   the nest-engine script above, so the screen stays live. Build is replayed rather than
+   rewritten: a pass runs straight through, and the first layout it needs that isn't
+   ready yet stops the pass, goes to the worker, and the pass starts over once it comes
+   back. Every step is deterministic, so a replay lands in the same place with one more
+   layout in hand. No worker (blocked, or an old browser) means the search runs in the
+   page exactly as it always did. */
+const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
+const NEST_MEMO=new Map();                 // this session: signature -> engine result
+let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
+let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
+function nestHash(str){
+  let a=2166136261, b=5381;
+  for(let i=0;i<str.length;i++){ const c=str.charCodeAt(i); a=Math.imul(a^c,16777619); b=Math.imul(b,33)^c; }
+  return (a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');
+}
+/* Everything the engine reads: the parts, the trial count, the kerf and the sheet. */
+function nestReq(parts,trials){
+  const ps=parts.map(p=>({id:p.id,L:p.L,S:p.S,name:p.name}));
+  const sig=nestHash(JSON.stringify([KERF,SHEET_W,SHEET_L,trials,ps.map(p=>[p.id,p.name,r4(p.L),r4(p.S)])]));
+  return {sig,parts:ps,trials,kerf:KERF,W:SHEET_W,L:SHEET_L};
+}
+const nestClone=o=>JSON.parse(JSON.stringify(o));
+function nestRemember(sig,res){
+  NEST_MEMO.delete(sig); NEST_MEMO.set(sig,res);
+  while(NEST_MEMO.size>40) NEST_MEMO.delete(NEST_MEMO.keys().next().value);
+}
+function nestFor(parts,trials){
+  const req=nestReq(parts,trials);
+  if(NEST_USED) NEST_USED.set(req.sig,req);
+  const hit=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+  if(hit){ if(hit.error) throw new Error(hit.error); return nestClone(hit); }
+  if(NESTER.ok()){ NESTER.want=req; throw NEST_PENDING; }
+  let res;
+  try{ res=CUTOPT.nest(parts,trials); }
+  catch(e){ nestRemember(req.sig,{error:String(e&&e.message||e)}); throw e; }
+  nestRemember(req.sig,res);
+  return nestClone(res);
+}
+const NEST_WORKER_TAIL=`
+self.onmessage=function(e){
+  var m=e.data;
+  KERF=m.kerf; SHEET_W=m.W; SHEET_L=m.L;
+  try{ var res=CUTOPT.nest(m.parts,m.trials,m.seed); self.postMessage({id:m.id,ok:true,res:res}); }
+  catch(err){ self.postMessage({id:m.id,ok:false,error:String(err&&err.message||err)}); }
+};`;
+const NESTER={
+  w:null, broken:false, seq:0, waits:new Map(), want:null,
+  ok(){ return !this.broken&&(!!this.w||this.start()); },
+  source(){ return document.getElementById('nest-engine').textContent+NEST_WORKER_TAIL; },
+  start(){
+    try{
+      if(typeof Worker!=='function'||typeof Blob!=='function'||!URL.createObjectURL) throw new Error('no worker');
+      const url=URL.createObjectURL(new Blob([this.source()],{type:'text/javascript'}));
+      const w=new Worker(url);
+      w.onmessage=e=>{ const d=e.data, p=this.waits.get(d&&d.id); if(!p) return; this.waits.delete(d.id); p.resolve(d); };
+      w.onerror=ev=>{ try{ ev.preventDefault(); }catch(_){} this.fail(); };
+      this.w=w; return true;
+    }catch(e){ this.broken=true; this.w=null; return false; }
+  },
+  /* A worker that errors is not tried again this session; the page takes over. */
+  fail(){ this.broken=true; this.drop(new Error('nesting worker failed')); },
+  /* Keep searching's Stop: the trial in flight is abandoned; the next request starts a fresh worker. */
+  stop(){ this.drop(NEST_STOPPED); },
+  drop(reason){
+    try{ this.w&&this.w.terminate(); }catch(e){}
+    this.w=null;
+    const waits=[...this.waits.values()]; this.waits.clear();
+    for(const p of waits) p.reject(reason);
+  },
+  run(req,seed){
+    if(!this.ok()) return Promise.reject(new Error('no worker'));
+    const id=++this.seq;
+    return new Promise((resolve,reject)=>{
+      this.waits.set(id,{resolve,reject});
+      this.w.postMessage({id,parts:req.parts,trials:req.trials,kerf:req.kerf,W:req.W,L:req.L,seed:seed??13579});
+    });
+  }
+};
+let BUILD_SEQ=0, BUILD_PENDING=false;
+
+/* ================= keep searching (v1.25) =================
+   The standard search is a fixed seed and a fixed number of trials, so the same job
+   always gets the same cut map. Keep searching runs the same engine in the worker on
+   fresh seeds with twice the trials, one sheet material at a time. A layout replaces
+   the one in use only if it needs fewer sheets, or the same sheets with a lower
+   balanced score. Because a better map changes the offcuts the next material can use,
+   the job is rebuilt after each find before the search moves on. Found layouts are
+   saved with the job; Reset goes back to the standard search. */
+const SEARCH_ROUNDS=20;
+const SEARCH={on:false,token:0,round:0,step:0,steps:0,found:0,startSheets:0,msg:''};
+const nestBetter=(a,b)=>!!a&&!!b&&(a.sheets<b.sheets||(a.sheets===b.sheets&&a.raw<b.raw-1e-6));
+const sheetTotal=()=>RESULT?RESULT.groups.reduce((n,g)=>n+(g.nest?g.nest.sheets:0),0):0;
+function stopSearch(){
+  if(!SEARCH.on) return;
+  SEARCH.on=false; SEARCH.token++;
+  NESTER.stop();
+  paintSearch();
+}
+function searchBar(){
+  if(!NESTER.ok()) return '';
+  return '<div class="searchbar">'+searchBarInner()+'</div>';
+}
+function searchBarInner(){
+  const kept=Object.keys(JOB_NEST_BEST).length;
+  if(SEARCH.on)
+    return '<div class="stext"><b>Searching</b> · round '+SEARCH.round+' of '+SEARCH.rounds+
+      ', layout '+SEARCH.step+' of '+SEARCH.steps+' · '+
+      (SEARCH.found?SEARCH.found+' better found, now '+sheetTotal()+' sheet'+(sheetTotal()===1?'':'s')+
+        ' (was '+SEARCH.startSheets+')':'nothing better yet')+'</div>'+
+      '<div class="sbar"><i style="width:'+Math.round(100*((SEARCH.round-1)*SEARCH.steps+SEARCH.step)/
+        Math.max(1,SEARCH.rounds*SEARCH.steps))+'%"></i></div>'+
+      '<div class="qbtns"><button type="button" class="btn-ghost btn-sm" data-s="stop">Stop</button></div>';
+  return '<div class="stext">'+(SEARCH.msg?esc(SEARCH.msg)+' ':'')+
+      (kept?'This job is using layouts from a deeper search. ':'Search longer for a cut map with fewer sheets or a tidier layout. ')+
+      'The screen stays usable while it runs.</div>'+
+    '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="go">Keep searching</button>'+
+      (kept?'<button type="button" class="btn-ghost btn-sm" data-s="reset">Reset to standard search</button>':'')+'</div>';
+}
+function paintSearch(){
+  for(const el of document.querySelectorAll('#resBody .searchbar')) el.innerHTML=searchBarInner();
+}
+/* Resolves once the build in progress has finished (or failed). */
+function afterBuild(){
+  return new Promise(res=>{ const tick=()=>BUILD_PENDING?setTimeout(tick,60):res(); tick(); });
+}
+async function keepSearching(){
+  if(SEARCH.on||!RESULT||!LAST_NEST_REQS||!LAST_NEST_REQS.size) return;
+  if(!NESTER.ok()) return toast('Keep searching needs background nesting, which this browser has blocked.');
+  const token=++SEARCH.token;
+  Object.assign(SEARCH,{on:true,round:0,rounds:SEARCH_ROUNDS,step:0,steps:LAST_NEST_REQS.size,found:0,
+                        startSheets:sheetTotal(),msg:''});
+  paintSearch();
+  const live=()=>SEARCH.on&&token===SEARCH.token;
+  try{
+    for(let round=1;round<=SEARCH_ROUNDS&&live();round++){
+      SEARCH.round=round;
+      const reqs=[...LAST_NEST_REQS.values()];
+      SEARCH.steps=reqs.length;
+      for(let i=0;i<reqs.length&&live();i++){
+        const req=reqs[i];
+        SEARCH.step=i+1; paintSearch();
+        const cur=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+        if(!cur||cur.error||!cur.score) continue;
+        const seed=(Math.imul(round,2654435761)^parseInt(req.sig.slice(0,8),16))>>>0;
+        const d=await NESTER.run({...req,trials:req.trials*2},seed);
+        if(!live()) break;
+        if(d.ok&&nestBetter(d.res.score,cur.score)){
+          JOB_NEST_BEST[req.sig]=d.res;
+          SEARCH.found++;
+          const seq=BUILD_SEQ;
+          build({quiet:true});
+          if(BUILD_SEQ===seq){                    // the job would not rebuild (an entry or a material prompt)
+            SEARCH.msg='The search stopped because the job needs attention before it can rebuild.';
+            SEARCH.on=false; break; }
+          await afterBuild();
+          break;                                  // later materials' parts may have changed: next round works from the rebuilt job
+        }
+      }
+    }
+    if(live()) SEARCH.msg=SEARCH.found
+      ?'Found '+SEARCH.found+' better layout'+(SEARCH.found>1?'s':'')+': '+sheetTotal()+' sheets, was '+SEARCH.startSheets+'.'
+      :'Searched '+SEARCH_ROUNDS+' rounds and the standard layouts held.';
+  }catch(e){
+    if(e!==NEST_STOPPED){ SEARCH.msg='The search stopped: '+(e&&e.message||e)+'.'; }
+  }finally{
+    if(token===SEARCH.token){ SEARCH.on=false; paintSearch(); if(SEARCH.found) toast(SEARCH.msg||'Search finished.',true); }
+  }
+}
 
 function packMaterial(material,matParts,stockOffcuts){
   const fittable=matParts.filter(p=>orient(p.L,p.S,SHEET_W,SHEET_L,'yield')!==null);
@@ -2159,7 +2362,7 @@ function packMaterial(material,matParts,stockOffcuts){
   }
   let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
   if(remaining.length){
-    const res=CUTOPT.nest(remaining,cutTrials(remaining.length));
+    const res=nestFor(remaining,cutTrials(remaining.length));
     ({sheets,metrics,openSheets,longNames}=res);
     strategy=res.label;
     for(const sh of sheets) for(const p of sh)
@@ -2458,6 +2661,12 @@ const NOMINAL={'3/4':'PF 3/4','1/2':'PF 1/2','1/4':'PF 1/4'};
 /* Substituting silently would change part thicknesses with nothing to show for it, so
    every swap is recorded and reported on the build. */
 let MAT_SWAPS=[];
+/* v1.24: materials are shop-wide, so editing a thickness or sheet size used to resize
+   every saved project on its next build without a word. JOB_MATS is what this job was
+   last built with; JOB_MAT_PIN holds sizes the job has been told to keep even though
+   the shop list has moved on. Both are saved with the job. Shop defaults editing never
+   sees the pins. */
+let JOB_MATS={}, JOB_MAT_PIN={}, MAT_PIN_OFF=false;
 const sheetName=v=>{
   const n=NOMINAL[v]||v;
   if(allMats().some(m=>m.name===n&&m.kind==='sheet')) return n;
@@ -2535,6 +2744,7 @@ function refreshDerived(){
   document.getElementById('d_upper_back').textContent=fmt(cfg.upper_back_height_deduction)+'"';
   document.getElementById('d_lower_back').textContent=fmt(cfg.lower_back_height_deduction)+'"';
   document.getElementById('d_ff_over').textContent=fmt(cfg.ff_overhang)+'"';
+  paintAssumpCard(cfg);
   /* Stick size is the stick material's, so the two fields mirror it rather than
      offering a second place to type a different answer. */
   const st=matOf(stickMat());
@@ -2737,7 +2947,7 @@ function renderRunOpts(run){
   }
   body.append(grid);
   const note=document.createElement('div'); note.className='fieldnote';
-  note.textContent='Blank follows the shop defaults. These apply to this run, in this project only.';
+  note.textContent='Blank follows Project construction. These apply to this run only.';
   body.append(note);
   box.append(body);
   /* Count the run overrides so a closed box still admits it is holding something.
@@ -3906,11 +4116,118 @@ const PALETTE=['#f4d35e','#8ecae6','#ee6c4d','#95d5b2','#e6a3c8','#f6bd60','#a3c
 const colorCache={};
 const colorFor=n=>colorCache[n]||(colorCache[n]=PALETTE[Object.keys(colorCache).length%PALETTE.length]);
 
-function build(){
+/* ================= field errors (v1.25) =================
+   Build used to toast the first problem it hit and leave you to find the box. These
+   checks mirror readCfg and solveRun exactly (they still run behind this as the last
+   word), but collect every bad entry so each one can be outlined where it sits. */
+function fieldErrors(){
+  const out=[];
+  const add=(el,msg,run)=>{ if(el) out.push({el,msg,run}); };
+  const labelOf=el=>{ const l=el.parentElement&&el.parentElement.querySelector('label'); return l?l.textContent.trim():el.id; };
+  for(const [sec,keys] of Object.entries(CFG_SECTIONS)) for(const k of keys){
+    const el=document.getElementById(k);
+    if(!el||CFG_SELECTS[k]) continue;
+    if(CFG_LISTS[k]){
+      const nums=el.value.split(',').map(x=>x.trim()).filter(Boolean).map(parseFrac);
+      if(nums.some(n=>n===null||!Number.isFinite(n)||n<=0))
+        add(el,'"'+labelOf(el)+'" under '+sec+' should be lengths separated by commas, like 18, 20, 22.');
+      continue;
+    }
+    const v=parseFrac(el.value);
+    if(v===null||!Number.isFinite(v)) add(el,'"'+labelOf(el)+'" under '+sec+' needs a number.');
+  }
+  const byId=id=>document.getElementById(id);
+  const num=id=>{ const e=byId(id); const v=e?parseFrac(e.value):null; return Number.isFinite(v)?v:null; };
+  const wr=num('width_round'); if(wr!==null&&!(wr>0)) add(byId('width_round'),'Width rounding needs to be greater than zero.');
+  const kf=num('kerf'); if(kf!==null&&kf<0) add(byId('kerf'),'Saw kerf cannot be negative.');
+  for(const id of ['carcass_dado_depth','drawer_dado_depth','door_dado_depth']){
+    const v=num(id); if(v!==null&&v<0) add(byId(id),'Dado depths cannot be negative.'); }
+  const ffw=parseFrac((byId('face_frame_width')||{}).value), lrw=num('lower_rail_width');
+  if(lrw!==null&&Number.isFinite(ffw)&&lrw>ffw+1e-9)
+    add(byId('lower_rail_width'),'Lower rail width is '+fmt(lrw)+'" but the face frame is '+fmt(ffw)+'" — the rail cannot be wider than the stiles.');
+  const bs=(byId('box_stock')||{}).value, cdd=num('carcass_dado_depth');
+  if(cdd!==null&&allMats().some(m=>m.name===bs&&m.kind==='sheet')&&cdd>matThick(bs))
+    add(byId('carcass_dado_depth'),'Carcass dado depth ('+fmt(cdd)+'") is deeper than the plywood is thick.');
+
+  for(const run of RUNS){
+    const st=state[run];
+    if(!include[run].on||st.n===0) continue;
+    const E=ELEV[run]||{cabs:[],gaps:[]};
+    const q=cls=>document.querySelector(cls+'[data-run="'+run+'"]');
+    const bad=v=>{ const n=parseFrac(v); return n!==null&&isNaN(n); };
+    const tw=q('.totalw'), dh=q('.def-h'), dw=q('.def-w'), dd=q('.def-d');
+    if(bad(tw&&tw.value)) add(tw,"Total width for the "+run+" run isn't a number I can read.",run);
+    if(bad(st.def.h)) add(dh,"Default height for the "+run+" run isn't a number I can read.",run);
+    if(bad(st.def.w)) add(dw,"Default width for the "+run+" run isn't a number I can read.",run);
+    if(bad(st.def.d)) add(dd,"Default depth for the "+run+" run isn't a number I can read.",run);
+    (st.gaps||[]).forEach((g,i)=>{ if(bad(g)){ const c=E.gaps[i]&&E.gaps[i].ctl2;
+      add(c&&c.querySelector('input'),"A gap between "+run+" cabinets isn't a number I can read.",run); } });
+    if(bad(st.left)) add(E.offL&&E.offL.inp,"A scribe gap on the "+run+" run isn't a number I can read.",run);
+    if(bad(st.right)) add(E.offR&&E.offR.inp,"A scribe gap on the "+run+" run isn't a number I can read.",run);
+    const defW=parseFrac(st.def.w), defH=parseFrac(st.def.h), defD=parseFrac(st.def.d);
+    st.cabs.forEach((c,i)=>{ const ref=E.cabs[i]||{};
+      if(bad(c.w)) add(ref.wIn,"A cabinet width in the "+run+" run isn't a number I can read.",run);
+      if(bad(c.h)) add(ref.hIn,"A cabinet height in the "+run+" run isn't a number I can read.",run);
+      if(bad(c.d)) add(ref.dIn,"A cabinet depth in the "+run+" run isn't a number I can read.",run); });
+    const widths=st.cabs.map(c=>{ const v=parseFrac(c.w); return v!==null?v:defW; });
+    const blanks=widths.filter(w=>w===null).length;
+    if(parseFrac(tw&&tw.value)===null&&blanks)
+      add(tw,"Fill in the total "+run+" run width, or give every "+run+" cabinet its own width. Right now "+
+        blanks+(blanks===1?" is":" are")+" blank with no total to divide.",run);
+    const heights=st.cabs.map(c=>{ const v=parseFrac(c.h); return v!==null?v:defH; });
+    if(heights.some(h=>h===null||isNaN(h))&&!bad(st.def.h))
+      add(dh,"Set a default height for the "+run+" run, or give every "+run+" cabinet its own.",run);
+    const depths=st.cabs.map(c=>{ const v=parseFrac(c.d); return v!==null?v:defD; });
+    if(depths.some(d=>d===null||isNaN(d))&&!bad(st.def.d))
+      add(dd,"Set a default depth for the "+run+" run, or give every "+run+" cabinet its own.",run);
+  }
+  return out;
+}
+function clearFieldError(el){
+  el.classList.remove('fieldbad'); el.removeAttribute('aria-invalid');
+  if(el.dataset.feTitle!==undefined){ el.title=el.dataset.feTitle; delete el.dataset.feTitle; }
+  const n=el.nextElementSibling; if(n&&n.classList.contains('fielderr')) n.remove();
+}
+function clearFieldErrors(){ document.querySelectorAll('.fieldbad').forEach(clearFieldError); }
+function showFieldErrors(list){
+  const seen=new Set(), marks=list.filter(x=>!seen.has(x.el)&&seen.add(x.el));
+  /* From the result tabs, go back to the entries so the marks can be seen. */
+  if(document.getElementById('results').classList.contains('on')) document.getElementById('btnBack').click();
+  for(const {el,msg,run} of marks){
+    el.classList.add('fieldbad'); el.setAttribute('aria-invalid','true');
+    el.dataset.feTitle=el.title||''; el.title=msg;
+    const d=el.closest('details'); if(d) d.open=true;
+    if(run&&el.closest('.defbox.closed')){ defOpen[run]=true; syncDefFold(run); }
+    /* Boxes in a grid have room for the reason underneath; the drawing's boxes don't. */
+    if(el.closest('.grid')){ const m=document.createElement('div'); m.className='fielderr'; m.textContent=msg; el.after(m); }
+  }
+  const first=marks[0].el;
+  try{ first.scrollIntoView({block:'center',inline:'center',behavior:'smooth'}); }
+  catch(e){ try{ first.scrollIntoView(); }catch(_){} }
+  toast(marks.length>1?marks[0].msg+' ('+marks.length+' entries are marked in red.)':marks[0].msg);
+}
+document.addEventListener('input',e=>{ const t=e.target; if(t&&t.classList&&t.classList.contains('fieldbad')) clearFieldError(t); });
+
+function build(opts){
   const btn=document.getElementById('btnBuild');
+  /* Keep searching rebuilds quietly each time it finds something; a build you ask for
+     stops the search first. (As a click handler this receives the event, hence the check.) */
+  const quiet=!!(opts&&opts.quiet===true);
+  if(!quiet) stopSearch();
+  clearFieldErrors();
+  const fieldErrs=fieldErrors();
+  if(fieldErrs.length) return showFieldErrors(fieldErrs);
+  /* Ask before building on material sizes this job was never built with. No drift
+     means the build runs straight through, exactly as before. */
+  const drift=matDrift();
+  if(drift.length){ askMatDrift(drift).then(go=>{ if(go) build(); }); return; }
   let cfg;
   try{ cfg=readCfg(); }catch(e){ return toast(e.message); }
   const errs=[], runs={}, warns=[];
+  const pinned=matsInUse().filter(n=>JOB_MAT_PIN[n]);
+  if(pinned.length)
+    warns.push('Built on this job\'s own sizes for '+esc(pinned.map(n=>n+' ('+matSpecTxt(shopSpec(n)||JOB_MAT_PIN[n],{kind:(shopSpec(n)||{}).kind,...JOB_MAT_PIN[n]}).replace(/ → /g,' in the shop list, job keeps ')+')').join('; '))+
+      '. <button type="button" class="warnbtn" data-act="mat-shop">Use shop sizes</button>');
   /* A material this job names is no longer on the list. It has been substituted so the
      job still builds, but the parts are a different thickness than they were. */
   const swaps=MAT_SWAPS.splice(0);
@@ -3924,7 +4241,12 @@ function build(){
     if(!s.ok) errs.push(...s.errs);
     else { runs[r]=s; if(s.warn) warns.push(s.warn); if(s.fitWarns) warns.push(...s.fitWarns); }
   }
-  if(errs.length) return toast(errs[0]);
+  if(errs.length){
+    /* Left over after the field checks: the widths don't fit the total. Point at it. */
+    const m=errs[0].match(/\b(upper|lower)\b/), tw=m&&document.querySelector('.totalw[data-run="'+m[1]+'"]');
+    if(tw&&/total width|zero or negative/.test(errs[0])) return showFieldErrors([{el:tw,msg:errs[0],run:m[1]}]);
+    return toast(errs[0]);
+  }
   const RC={upper:runCfg('upper',cfg),lower:runCfg('lower',cfg)};
   const cabs=[...(runs.upper?.cabs||[]),...(runs.lower?.cabs||[])];
   if(!cabs.length) return toast('Nothing to build — tick a run and add some cabinets.');
@@ -4049,13 +4371,38 @@ function build(){
   else push('ff','Frames & doors',ff.concat(doors));
 
   btn.disabled=true; btn.textContent='Nesting…';
-  setTimeout(()=>{
+  /* Read once, so a pass replayed after the worker answers sees the same settings. */
+  const offSnap={}, outSnap={...include.out};
+  for(const pre of ['off_use_','off_log_']) for(const k of ['cab','drw','ff']){
+    const el=document.getElementById(pre+k); offSnap[pre+k]=el?el.value==='yes':false; }
+  const warnBase=warns.length, mySeq=++BUILD_SEQ;
+  BUILD_PENDING=true;
+  const pass=()=>{
+    if(mySeq!==BUILD_SEQ) return;                  // a newer build took over
+    warns.length=warnBase;
+    NEST_USED=new Map();
+    try{ buildPass(); }
+    catch(e){
+      SHEET_L=96; SHEET_W=48;
+      if(e!==NEST_PENDING){ NEST_USED=null; BUILD_PENDING=false;
+        btn.disabled=false; btn.textContent=RESULT?'Rebuild':'Build cut list'; throw e; }
+      const req=NESTER.want;
+      NESTER.run(req).then(d=>{
+        nestRemember(req.sig,d.ok?d.res:{error:d.error});
+        pass();
+      },err=>{
+        if(err!==NEST_STOPPED) NESTER.fail();      // broken worker: finish in the page
+        pass();
+      });
+    }
+  };
+  const buildPass=()=>{
     /* Groups nest in order against one shared rack. Cabinets go first, so a drawer
        run built later can land on the offcuts the carcasses just produced. */
     /* Each cut map decides for itself whether to raid the rack and whether to bank
        what it produces. Doors follow the frames, since they share the same stock. */
     const offKey=k=>(k==='door'?'ff':k);
-    const offSet=(pre,k)=>{ const el=document.getElementById(pre+offKey(k)); return el?el.value==='yes':false; };
+    const offSet=(pre,k)=>offSnap[pre+offKey(k)];
     const stock=loadOffcuts();
     const unplaced=[]; let banked=[];
     for(const g of groups){
@@ -4124,7 +4471,7 @@ function build(){
             '). Add boards in the offcut library, or cut these by hand from the list.');
         }
       }
-      if(g.sheetParts.length&&(include.out.cutmap||include.out.estimate)) try{
+      if(g.sheetParts.length&&(outSnap.cutmap||outSnap.estimate)) try{
         g.nest=runNesting(g.sheetParts,cfg,g.useOff?stock.concat(banked):[]);
         /* runNesting has always collected parts too big for any sheet; nothing read the
            list, so a 100" part simply vanished from the cut map with no sheet raised. */
@@ -4138,6 +4485,7 @@ function build(){
             ' longer than a half sheet, so '+m.openSheets+' '+m.material+' sheet'+(m.openSheets>1?'s are':' is')+
             ' ripped full length first and broken down after. '+(m.openSheets>1?'Those sheets go':'That sheet goes')+' on the saw whole.');
       }catch(e){
+        if(e===NEST_PENDING) throw e;              // not a failure: the worker has it
         console.error(e); unplaced.push(...g.sheetParts);
         warns.push(g.label+': nesting failed, so this result and its estimate are incomplete.');
       }
@@ -4164,14 +4512,21 @@ function build(){
     RESULT={cfg,runCfg:RC,runs,cabs,parts,groups,scope,complete:unplaced.length===0,
             drawersApart,doorsApart,warns,useOff,logOff,ffInfo,tkInfo,frontInfo,
             rack:{stock,sourceSig:rackSig(stock),unusedStock,banked}};
+    /* Record the sizes this result was cut on (pins included) and store them with the job. */
+    for(const n of matsInUse()){ const m=matOf(n); if(m) JOB_MATS[n]={kind:m.kind,l:m.l,w:m.w,t:m.t}; }
     document.getElementById('builder').style.display='none';
     document.getElementById('assumpCard').style.display='none';
     document.getElementById('results').classList.add('on');
     document.getElementById('btnBack').style.display='';
     btn.disabled=false; btn.textContent='Rebuild';
     renderPriceRows();
-    fillAssump(); render(); window.scrollTo(0,0);
-  },30);
+    /* Deeper-search layouts are kept only for the parts they were found for. */
+    LAST_NEST_REQS=NEST_USED; NEST_USED=null; BUILD_PENDING=false;
+    for(const k of Object.keys(JOB_NEST_BEST)) if(!LAST_NEST_REQS.has(k)) delete JOB_NEST_BEST[k];
+    fillAssump(); render(); if(!quiet) window.scrollTo(0,0);
+    save();
+  };
+  setTimeout(pass,30);
 }
 
 function runNesting(parts,cfg,stock){
@@ -4216,16 +4571,39 @@ function tabDefs(){
   if(include.out.cutmap) t.push({id:'off',label:'Offcuts'});
   return t;
 }
+/* v1.25: a full job ran to a dozen tabs in one scrolling row. They now sit under four
+   sections, with the sections' own tabs beneath. The tab ids are unchanged, so print,
+   saved views and everything else that names a tab carry on as before. */
+const TAB_SECTIONS=[['plan','Plan'],['cut','Cut'],['build','Build'],['money','Money']];
+const tabSection=id=>id==='layout'?'plan':(/^(cut|map):/.test(id)||id==='off')?'cut':/^dwg/.test(id)?'build':'money';
+const LAST_SUB={};
 function renderTabs(){
   const bar=document.getElementById('tabs');
-  bar.innerHTML='';
-  for(const t of tabDefs()){
-    const el=document.createElement('div');
-    el.className='tab'+(t.id===VIEW?' sel':'');
-    el.textContent=t.label;
-    el.onclick=()=>{ VIEW=t.id; render(); };
-    bar.append(el);
+  bar.innerHTML=''; bar.classList.add('grouped');
+  const defs=tabDefs(), cur=tabSection(VIEW);
+  LAST_SUB[cur]=VIEW;
+  const secs=document.createElement('div'); secs.className='secs'; secs.setAttribute('role','tablist');
+  for(const [id,label] of TAB_SECTIONS){
+    const list=defs.filter(t=>tabSection(t.id)===id);
+    if(!list.length) continue;
+    const b=document.createElement('button'); b.type='button';
+    b.className='sec'+(id===cur?' sel':''); b.textContent=label;
+    b.setAttribute('role','tab'); b.setAttribute('aria-selected',String(id===cur));
+    b.onclick=()=>{ const last=LAST_SUB[id]; VIEW=list.some(t=>t.id===last)?last:list[0].id; render(); };
+    secs.append(b);
   }
+  bar.append(secs);
+  const subs=defs.filter(t=>tabSection(t.id)===cur);
+  if(subs.length<2) return;
+  const row=document.createElement('div'); row.className='subtabs'; row.setAttribute('role','tablist');
+  for(const t of subs){
+    const b=document.createElement('button'); b.type='button';
+    b.className='tab'+(t.id===VIEW?' sel':''); b.textContent=t.label;
+    b.setAttribute('role','tab'); b.setAttribute('aria-selected',String(t.id===VIEW));
+    b.onclick=()=>{ VIEW=t.id; render(); };
+    row.append(b);
+  }
+  bar.append(row);
 }
 function render(){
   if(!RESULT) return;
@@ -4378,6 +4756,7 @@ function viewMap(body,sum,g){
        (g.boards.unplaced.length?'<div>Not placed<b>'+g.boards.unplaced.length+'</b></div>':'')
       :'');
   let h='';
+  if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   if(N&&N.materials.length){
     h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
     for(const m of N.materials)
@@ -4580,13 +4959,34 @@ function sheetSVG(panel,board){
 }
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
+/* v1.24: the "How parts are figured" card used to carry typed-in numbers that went
+   stale the moment a setting changed. Every figure that is a setting is painted here. */
+function paintAssumpCard(cfg){
+  const inch=v=>fmt(v)+'"';
+  const val={width_deduction:inch(cfg.width_deduction),carcass_dado_depth:inch(cfg.carcass_dado_depth),
+    upper_panel_inset:inch(cfg.upper_panel_inset),upper_stretcher_qty:String(Math.round(cfg.upper_stretcher_qty)),
+    lower_stretcher_qty:String(Math.round(cfg.lower_stretcher_qty)),
+    lower_shelf_depth_back:inch(cfg.lower_shelf_depth_back),lower_shelf_depth_noback:inch(cfg.lower_shelf_depth_noback),
+    width_round:inch(cfg.width_round),toe_kick_cross_span:inch(cfg.toe_kick_cross_span),
+    stick_name:stickMat(),stock_length:inch(cfg.stock_length),stock_width:inch(cfg.stock_width)};
+  for(const el of document.querySelectorAll('[data-av]'))
+    if(val[el.dataset.av]!=null) el.textContent=val[el.dataset.av];
+}
 function fillAssump(){
   const c=RESULT.cfg;
+  /* The last line used to say doors, fronts and frames were never included, long after
+     they were. It now reports what this build actually left out. */
+  const left=[];
+  for(const r of RUNS){
+    const nm=r==='upper'?'Upper':'Lower';
+    if(!include[r].on){ left.push(nm+' run'); continue; }
+    for(const [k,l] of INC_PARTS[r]) if(!include[r][k]) left.push(nm.toLowerCase()+' '+l.toLowerCase());
+  }
   document.getElementById('assumpList').innerHTML=
-    '<li>ply '+fmt(c.ply_thickness)+'" · toe kick '+fmt(c.toe_kick_height)+'" · countertop '+fmt(c.countertop_thickness)+'"</li>'+
+    '<li>Box stock '+esc(c.box_stock)+' at '+fmt(c.ply_thickness)+'" · toe kick '+fmt(c.toe_kick_height)+'" · countertop '+fmt(c.countertop_thickness)+'"</li>'+
     '<li>Width deduction '+fmt(c.width_deduction)+'" · widths rounded to '+fmt(c.width_round)+'" · kerf '+fmt(c.kerf)+'"</li>'+
-    '<li>Breakdown crosscut on every full sheet between 36" and 60".</li>'+
-    '<li>Doors, drawer fronts and face frames not included.</li>';
+    '<li>Breakdown crosscut on every full sheet between '+CENTER_LO+'" and '+CENTER_HI+'".</li>'+
+    '<li>'+(left.length?'Left out of this job: '+esc(left.join(', '))+'.':'Every part of the included runs is in this job.')+'</li>';
 }
 
 /* ================= estimator ================= */
@@ -4877,11 +5277,13 @@ function viewEstimate(body,sum){
   const R=RESULT, e=buildEstimate(R);
   const $=n=>'$'+n.toLocaleString('en-US',{maximumFractionDigits:0});
   sum.innerHTML=(R.complete?'':'<div>Status<b>Incomplete</b></div>')+
+    (QUOTE?'<div>Quoted<b>'+$(QUOTE.total)+'</b></div>':'')+
     '<div>Hours<b>'+e.hours.toFixed(1)+'</b></div>'+
-    '<div>Total<b>'+$(e.total)+'</b></div>'+
+    '<div>'+(QUOTE?'Now':'Total')+'<b>'+$(e.total)+'</b></div>'+
     '<div>Per box<b>'+$(e.total/Math.max(1,e.c.box))+'</b></div>';
   let h=(R.complete?'':'<div class="warn">Required pieces are missing from the cut maps. This price is preliminary.</div>')+
-    '<div class="estsec"><h3>Time</h3><div class="tblwrap"><table>'+
+    quoteBox(e)+
+    '<div class="estsec"><h3>'+(QUOTE?'Current estimate · time':'Time')+'</h3><div class="tblwrap"><table>'+
     '<thead><tr><th>Task</th><th class="n">Setup</th><th class="n">Each</th><th class="n">Qty</th><th class="n">Hours</th></tr></thead><tbody>';
   for(const r of e.rows)
     h+='<tr><td>'+r.name+(r.detail?'<br><span style="font-size:10px;color:#7c8894">'+r.detail+'</span>':'')+
@@ -4925,6 +5327,88 @@ function viewEstimate(body,sum){
      e.c.drawerbox+' drawer boxes · '+e.c.sheet+' sheets · '+e.c.stick+' sticks · '+
      e.c.sqft.toFixed(0)+' sq ft to finish</div></div>';
   body.innerHTML=h;
+}
+
+/* ================= frozen quote (v1.25) =================
+   Once a price has gone to the customer, Lock quote keeps a copy of the estimate as it
+   stood. The live estimate still follows every rebuild and price change, and the
+   Estimate tab shows exactly what moved against the locked copy. */
+let QUOTE=null;
+function quoteSnapshot(e){
+  return {at:new Date().toISOString(), complete:!!RESULT.complete,
+    total:e.total, hours:e.hours, labor:e.labor, matCost:e.matCost, hwCost:e.hwCost,
+    direct:e.direct, overhead:e.overhead, profit:e.profit,
+    rate:est.rate, overheadPct:est.overhead, profitPct:est.profit,
+    tasks:e.rows.map(r=>({name:r.name,mins:r.mins})),
+    mats:e.matRows.map(r=>({name:r.name,qty:r.qty,unit:r.unit,cost:r.cost})),
+    hw:e.hwRows.map(r=>({name:r.name,qty:String(r.qty),cost:r.cost})),
+    counts:{boxes:e.c.box,doors:e.c.door,fronts:e.c.front,'drawer boxes':e.c.drawerbox,sheets:e.c.sheet,sticks:e.c.stick}};
+}
+/* Every line that differs, as [label, quoted, now, change]. Whole dollars and tenths
+   of an hour, the precision the estimate is shown at. */
+function quoteChanges(q,e){
+  const now=quoteSnapshot(e), out=[];
+  const $=n=>'$'+Math.round(n).toLocaleString('en-US');
+  const sd=n=>(n>0?'+':n<0?'\u2212':'')+'$'+Math.abs(Math.round(n)).toLocaleString('en-US');
+  const money=(label,a,b)=>{ if(Math.round(a)!==Math.round(b)) out.push([label,$(a),$(b),sd(b-a)]); };
+  const hrs=(label,a,b)=>{ if(Math.abs(a-b)>=0.05) out.push([label,a.toFixed(1)+' h',b.toFixed(1)+' h',(b-a>0?'+':'\u2212')+Math.abs(b-a).toFixed(1)+' h']); };
+  const plain=(label,a,b)=>{ if(String(a)!==String(b)) out.push([label,String(a),String(b),'']); };
+  money('Project total',q.total,now.total);
+  hrs('Labour hours',q.hours,now.hours);
+  money('Labour',q.labor,now.labor);
+  money('Materials',q.matCost,now.matCost);
+  money('Hardware & finish',q.hwCost,now.hwCost);
+  money('Overhead',q.overhead,now.overhead);
+  money('Profit',q.profit,now.profit);
+  plain('Shop rate',$(q.rate)+'/h',$(now.rate)+'/h');
+  plain('Overhead %',q.overheadPct+'%',now.overheadPct+'%');
+  plain('Profit %',q.profitPct+'%',now.profitPct+'%');
+  for(const k of Object.keys({...q.counts,...now.counts})) plain('Count of '+k,q.counts[k]??0,now.counts[k]??0);
+  const lines=(a,b,f)=>{ const names=[...new Set(a.map(x=>x.name).concat(b.map(x=>x.name)))];
+    for(const n of names) f(n,a.find(x=>x.name===n),b.find(x=>x.name===n)); };
+  lines(q.tasks,now.tasks,(n,a,b)=>hrs('Time · '+n,(a?a.mins:0)/60,(b?b.mins:0)/60));
+  const qtyTxt=r=>r?(r.unit==='board ft'?r.qty+' bf':r.qty+' '+r.unit+(r.qty>1?'s':'')):'none';
+  lines(q.mats,now.mats,(n,a,b)=>{ plain('Qty · '+n,qtyTxt(a),qtyTxt(b)); money('Cost · '+n,a?a.cost:0,b?b.cost:0); });
+  lines(q.hw,now.hw,(n,a,b)=>{ plain('Qty · '+n,a?a.qty:'none',b?b.qty:'none'); money('Cost · '+n,a?a.cost:0,b?b.cost:0); });
+  if(q.complete!==now.complete) plain('Cut maps',q.complete?'complete':'incomplete',now.complete?'complete':'incomplete');
+  return out;
+}
+function quoteBox(e){
+  if(!QUOTE) return '<div class="quotebox"><div class="qtext"><b>Not locked.</b> Lock the quote when you send this price. '+
+    'Later rebuilds and price changes will be shown against it.</div>'+
+    '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-q="lock">Lock quote</button></div></div>';
+  const $=n=>'$'+Math.round(n).toLocaleString('en-US');
+  const ch=quoteChanges(QUOTE,e), when=new Date(QUOTE.at);
+  let h='<div class="quotebox locked"><div class="qtext"><b>Quote locked</b> '+
+    esc(when.toLocaleDateString())+' at <b>'+$(QUOTE.total)+'</b>.';
+  if(!ch.length) h+=' The current estimate matches it.</div>';
+  else{
+    const d=Math.round(e.total)-Math.round(QUOTE.total);
+    h+=' Current estimate '+$(e.total)+(d?' ('+(d>0?'+':'\u2212')+'$'+Math.abs(d).toLocaleString('en-US')+')':'')+
+      '. What changed since the quote:</div>'+
+      '<div class="tblwrap"><table class="qdiff"><thead><tr><th>Item</th><th class="n">Quoted</th><th class="n">Now</th><th class="n">Change</th></tr></thead><tbody>'+
+      ch.map(r=>'<tr><td>'+esc(r[0])+'</td><td class="n">'+esc(r[1])+'</td><td class="n">'+esc(r[2])+'</td><td class="n">'+esc(r[3])+'</td></tr>').join('')+
+      '</tbody></table></div>';
+  }
+  h+='<div class="qbtns">'+(ch.length?'<button type="button" class="btn-ghost btn-sm" data-q="relock">Lock at current price</button>':'')+
+     '<button type="button" class="btn-ghost btn-sm" data-q="unlock">Unlock</button></div></div>';
+  return h;
+}
+async function quoteAction(act){
+  if(!RESULT) return;
+  const e=buildEstimate(RESULT), $=n=>'$'+Math.round(n).toLocaleString('en-US');
+  if(act==='lock'){
+    if(!RESULT.complete&&!await uiConfirm('Lock an incomplete estimate?',
+      'Some pieces are missing from the cut maps, so this price is preliminary.','Lock anyway',true)) return;
+    QUOTE=quoteSnapshot(e); save(); render(); toast('Quote locked at '+$(QUOTE.total)+'.',true);
+  }else if(act==='relock'){
+    if(!await uiConfirm('Lock at the current price?','The locked quote of '+$(QUOTE.total)+
+      ' is replaced by the current estimate of '+$(e.total)+'.','Replace')) return;
+    QUOTE=quoteSnapshot(e); save(); render(); toast('Quote locked at '+$(QUOTE.total)+'.',true);
+  }else if(act==='unlock'){
+    if(!await uiConfirm('Unlock the quote?','The locked copy at '+$(QUOTE.total)+' is thrown away.','Unlock',true)) return;
+    QUOTE=null; save(); render(); toast('Quote unlocked.');
+  }
 }
 
 /* ================= shop drawings ================= */
@@ -5823,16 +6307,58 @@ function viewShopping(body,sum){
 
 /* ================= saved projects ================= */
 const PKEY='bbcab_projects';
+const NEWKEY='bbcab_new';                        // one-shot: the project New just created
 function projList(){
   try{ return JSON.parse(localStorage.getItem(PKEY)||'{}'); }catch(e){ return {}; }
 }
-function projSave(name){
+function projSave(name,quietMsg){
+  if(!save()) return false;
   const all=projList();
-  if(!save()) return;
   all[name]={saved:new Date().toISOString(),job:localStorage.getItem('bbcab')};
-  try{ localStorage.setItem(PKEY,JSON.stringify(all)); }catch(e){ return toast('Storage is full — export a backup and clear some projects.'); }
+  try{ localStorage.setItem(PKEY,JSON.stringify(all)); }catch(e){ toast('Storage is full — export a backup and clear some projects.'); return false; }
   localStorage.setItem('bbcab_current',name);
-  toast('Saved "'+name+'".',true);
+  paintProjBar();
+  toast(quietMsg||'Saved "'+name+'".',true);
+  return true;
+}
+function uniqueProjectName(base){
+  const taken=new Set(Object.keys(projList()).map(k=>k.toLowerCase()));
+  if(!taken.has(base.toLowerCase())) return base;
+  let i=2; while(taken.has((base+' '+i).toLowerCase())) i++;
+  return base+' '+i;
+}
+/* A job with real input that is not saved as a project. The untouched blank job a
+   fresh start leaves behind does not count, or every New would ask. */
+function scratchHasWork(){
+  const cur=localStorage.getItem('bbcab_current');
+  if(cur&&projList()[cur]) return false;
+  let d; try{ d=JSON.parse(localStorage.getItem('bbcab')||'null'); }catch(e){ return false; }
+  if(!d||!d.state) return false;
+  if(d.built) return true;
+  const typed=v=>String(v??'').trim()!=='';
+  if(Object.values(d.totals||{}).some(typed)) return true;
+  return RUNS.some(r=>{ const st=d.state[r]||{};
+    return typed(st.def?.h)||typed(st.def?.w)||(st.cabs||[]).some(c=>typed(c.w)||typed(c.h)); });
+}
+/* Called before anything that replaces the working copy. Resolves true when it is
+   safe to go on. */
+async function confirmLeaveJob(){
+  if(!save()) return uiConfirm('Recent edits not saved','Storage is full, so the latest changes to this job could not be saved. Go on and lose them?','Go on',true);
+  if(!scratchHasWork()) return true;
+  const v=await uiSheet((box,close)=>{
+    sheetHead(box,'This job isn\u2019t saved','It hasn\u2019t been saved as a project, so it will be lost.');
+    sheetBtns(box,close,[{label:'Cancel',v:null},{label:'Discard',v:'drop',kind:'danger'},
+      {label:'Save it',v:'save',kind:'go'}]);
+  });
+  if(v==='drop') return true;
+  if(v!=='save') return false;
+  const cur=localStorage.getItem('bbcab_current');
+  const n=await uiPrompt('Save as project',null,cur&&cur!=='Untitled'?cur:'','Kitchen for…');
+  if(n===null||!n.trim()) return false;
+  const name=n.trim();
+  if(Object.keys(projList()).some(k=>k.toLowerCase()===name.toLowerCase())){
+    toast('There is already a project called "'+name+'". Pick another name.'); return false; }
+  return projSave(name);
 }
 function projOpen(name){
   const all=projList();
@@ -6062,12 +6588,26 @@ function returnCards(){
   for(const s of cardSlots){ s.el.style.display=s.disp; s.parent.insertBefore(s.el,s.next); }
   cardSlots=[];
 }
+/* v1.25: which sections belong to this project and which to the whole shop. The same
+   cards are borrowed by the shop defaults editor, so the badges follow the mode. */
+function paintScopeTags(){
+  const master=typeof masterMode!=='undefined'&&masterMode;
+  for(const t of document.querySelectorAll('.scopetag')){
+    const shop=t.dataset.scope==='shop';
+    t.textContent=shop?'Shop-wide':master?'Shop default':'Project';
+    t.classList.toggle('shop',shop); t.classList.toggle('master',!shop&&master);
+  }
+  for(const n of document.querySelectorAll('[data-name-project]'))
+    n.textContent=master?n.dataset.nameMaster:n.dataset.nameProject;
+}
 function enterMasterEdit(focus){
   masterStash=collectMaster();                 // the project's own settings
+  MAT_PIN_OFF=true;                            // shop defaults see shop sizes, not this job's pins
   const m=readMaster();
   if(m) applyMaster(m);                        // otherwise seed from what is open
   masterMode=true;
   borrowCards(document.getElementById('masterHost'));
+  paintScopeTags();
   document.getElementById('matBox').open=(focus==='mat');
   document.getElementById('cfgBox').open=(focus==='cfg');
   document.getElementById('timeBox').open=(focus==='est');
@@ -6084,10 +6624,12 @@ function enterMasterEdit(focus){
 function exitMasterEdit(keep){
   if(keep) writeMaster(collectMaster());
   masterMode=false;
+  MAT_PIN_OFF=false;
   applyMaster(masterStash);                    // put the project's numbers back
   masterStash=null;
   for(const b of ['cfgBox','timeBox','priceBox']){ const e=document.getElementById(b); if(e) e.open=false; }
   returnCards();
+  paintScopeTags();
   document.getElementById('masterEdit').classList.remove('on');
   showHome(true);
   toast(keep?'Shop defaults saved.':'Left the shop defaults unchanged.',keep);
@@ -6134,7 +6676,7 @@ function renderHome(){
       (n===cur?' · open':'')+'</div></div>';
     row.firstChild.firstChild.textContent=n;
     const open=document.createElement('button'); open.textContent='Open';
-    open.onclick=()=>projOpen(n);
+    open.onclick=async()=>{ if(await confirmLeaveJob()) projOpen(n); };
     const del=document.createElement('button'); del.className='del'; del.textContent='Delete';
     del.onclick=async()=>{
       if(!await uiConfirm('Delete "'+n+'"?','This cannot be undone.','Delete',true)) return;
@@ -6164,11 +6706,16 @@ function homeInit(){
   document.getElementById('hNew').onclick=async()=>{
     const n=await uiPrompt('New project','It starts from your shop defaults.','','Kitchen for…');
     if(n===null) return;
-    const name=(n||'').trim()||'Untitled';
+    const typedName=(n||'').trim();
+    if(typedName&&Object.keys(projList()).some(k=>k.toLowerCase()===typedName.toLowerCase()))
+      return toast('There is already a project called "'+typedName+'". Pick another name.');
+    const name=typedName||uniqueProjectName('Untitled');
+    if(!await confirmLeaveJob()) return;
     if(Object.keys(projList()).some(k=>k.toLowerCase()===name.toLowerCase()))
       return toast('There is already a project called "'+name+'". Pick another name.');
     localStorage.removeItem('bbcab');
     localStorage.setItem('bbcab_current',name);
+    localStorage.setItem(NEWKEY,name);           // opened and listed after the reload
     hardReload();
   };
   document.getElementById('hContinue').onclick=()=>showHome(false);
@@ -6285,7 +6832,61 @@ function loadMats(){
     return Array.isArray(a)?a.filter(m=>m&&m.name).map(migrateMat):[];
   }catch(e){ return []; }
 }
-const matOf=n=>allMats().find(m=>m.name===n)||null;
+const matOf=n=>{
+  const m=allMats().find(x=>x.name===n)||null;
+  const p=m&&!MAT_PIN_OFF&&JOB_MAT_PIN[n];
+  return p?{...m,l:p.l,w:p.w,t:p.t}:m;
+};
+/* The shop list's own record, ignoring any pin on the open job. */
+const shopSpec=n=>{ const m=allMats().find(x=>x.name===n); return m?{kind:m.kind,l:m.l,w:m.w,t:m.t}:null; };
+const specDiffers=(a,b)=>a.kind!==b.kind||['l','w','t'].some(k=>Math.abs((+a[k]||0)-(+b[k]||0))>1e-6);
+function matsInUse(){
+  const names=new Set();
+  for(const k of RENAME_KEYS){ const el=document.getElementById(k); if(el&&el.value) names.add(el.value); }
+  names.add(stickMat());
+  return [...names];
+}
+/* Materials whose shop record no longer matches what this job was last built with,
+   and that the job has not already been told to keep. A pin that the shop list has
+   come back to is no longer doing anything, so it is dropped. */
+function matDrift(){
+  for(const n of Object.keys(JOB_MAT_PIN)){
+    const cur=shopSpec(n);
+    if(cur&&!specDiffers(cur,{kind:cur.kind,...JOB_MAT_PIN[n]})) delete JOB_MAT_PIN[n];
+  }
+  const out=[];
+  for(const n of matsInUse()){
+    const was=JOB_MATS[n], cur=shopSpec(n);
+    if(!was||!cur||JOB_MAT_PIN[n]) continue;
+    if(specDiffers(was,cur)) out.push({n,from:was,to:cur});
+  }
+  return out;
+}
+function matSpecTxt(a,b){
+  const bits=[];
+  if(Math.abs(a.t-b.t)>1e-6) bits.push('thickness '+(+a.t).toFixed(3)+'" → '+(+b.t).toFixed(3)+'"');
+  if(Math.abs(a.l-b.l)>1e-6||Math.abs(a.w-b.w)>1e-6)
+    bits.push('size '+fmt(a.w)+'" × '+fmt(a.l)+'" → '+fmt(b.w)+'" × '+fmt(b.l)+'"');
+  if(a.kind!==b.kind) bits.push('type '+a.kind+' → '+b.kind);
+  return bits.join(', ');
+}
+async function askMatDrift(drift){
+  const msg='The shop materials list changed after this job was last built:\n\n'+
+    drift.map(d=>d.n+': '+matSpecTxt(d.from,d.to)).join('\n')+
+    '\n\nKeep the sizes this job was built with, or rebuild on the new ones? New sizes change part sizes and sheet counts.';
+  const v=await uiSheet((box,close)=>{
+    sheetHead(box,'Materials changed',msg);
+    sheetBtns(box,close,[{label:'Cancel',v:null},{label:'Keep job sizes',v:'keep'},
+      {label:'Use new sizes',v:'new',kind:'go'}]);
+  });
+  if(!v) return false;
+  for(const d of drift){
+    if(v==='keep') JOB_MAT_PIN[d.n]={l:d.from.l,w:d.from.w,t:d.from.t};
+    else JOB_MATS[d.n]=d.to;
+  }
+  save();
+  return true;
+}
 const matsOfKind=k=>allMats().filter(m=>m.kind===k);
 /* Renaming a built-in does not erase its shipped price on a fresh job. Follow the
    rename chain back to the built-in key whenever no job-specific price exists. */
@@ -6330,12 +6931,17 @@ function renameMaterial(from,to){
 
   const movePrice=e=>{ if(!e?.prices||e.prices[from]==null) return false;
     e.prices[to]=e.prices[from]; delete e.prices[from]; return true; };
+  /* v1.24: a job's recorded and pinned material sizes follow the name too. */
+  const moveSnap=j=>{ let hit=false;
+    for(const k of ['mats','matPin']) if(j&&j[k]&&j[k][from]){ j[k][to]=j[k][from]; delete j[k][from]; hit=true; }
+    return hit; };
   let projects=null, projectsHit=false;
   try{
     projects=JSON.parse(localStorage.getItem(PKEY)||'{}');
     for(const nm in projects){
       try{ const j=JSON.parse(projects[nm].job); let hit=swap(j.cfg);
            if(movePrice(j.est)) hit=true;
+           if(moveSnap(j)) hit=true;
            if(hit){ projects[nm].job=JSON.stringify(j); projectsHit=true; } }catch(e){}
     }
   }catch(e){ projects=null; }
@@ -6345,7 +6951,7 @@ function renameMaterial(from,to){
   if(m){ masterHit=swap(m.cfg); if(movePrice(m.est)) masterHit=true; }
   let open=null, openHit=false;
   try{ open=JSON.parse(localStorage.getItem('bbcab')||'null');
-       if(open){ openHit=swap(open.cfg); if(movePrice(open.est)) openHit=true; } }catch(e){ open=null; }
+       if(open){ openHit=swap(open.cfg); if(movePrice(open.est)) openHit=true; if(moveSnap(open)) openHit=true; } }catch(e){ open=null; }
 
   const writes=[[MATKEY,JSON.stringify(mats)],[MRENAME,JSON.stringify(renamed)]];
   if(touched) writes.push(['bbcab_offcuts',JSON.stringify(rack.map(o=>({
@@ -6365,6 +6971,7 @@ function renameMaterial(from,to){
   }
   BUILTIN_RENAMED=renamed;
   if(est.prices[from]!=null){ est.prices[to]=est.prices[from]; delete est.prices[from]; }
+  moveSnap({mats:JOB_MATS,matPin:JOB_MAT_PIN});
 
   // and the fields open right now
   for(const k of RENAME_KEYS){ const el=document.getElementById(k);
@@ -6496,7 +7103,7 @@ function matForm(existing){
 
     const note=document.createElement('div'); note.className='fieldnote'; box.append(note);
     const sync=()=>{
-      note.textContent='Priced '+MAT_UNIT[sel.value]+', set under Price defaults'+
+      note.textContent='Priced '+MAT_UNIT[sel.value]+', set under Prices'+
         (sel.value==='lumber'
           ? '. Lumber comes in every size, so only thickness is recorded \u2014 it is what a board foot is figured on. 4/4 is 1".'
           : '. Length and width are the size one comes in, and they are what the cut maps nest against.');
@@ -6640,10 +7247,27 @@ let tid;
 function toast(msg,ok){
   const el=document.getElementById('toast');
   el.textContent=msg; el.className='toast on'+(ok?' ok':'');
+  placeToast();
   clearTimeout(tid); tid=setTimeout(()=>el.className='toast',ok?2400:5600);
 }
 document.getElementById('btnBuild').onclick=build;
+document.getElementById('resWarn').addEventListener('click',e=>{
+  if(!e.target.closest('[data-act="mat-shop"]')) return;
+  for(const n of Object.keys(JOB_MAT_PIN)){ const m=shopSpec(n); if(m) JOB_MATS[n]=m; }
+  JOB_MAT_PIN={}; save(); build();
+});
+/* Estimate and cut map buttons live in content that is redrawn, so they are caught here. */
+document.getElementById('resBody').addEventListener('click',e=>{
+  const q=e.target.closest('[data-q]');
+  if(q) return quoteAction(q.dataset.q);
+  const sb=e.target.closest('[data-s]');
+  if(!sb) return;
+  if(sb.dataset.s==='go') keepSearching();
+  else if(sb.dataset.s==='stop'){ stopSearch(); SEARCH.msg='Stopped. Anything better it found is kept.'; paintSearch(); }
+  else if(sb.dataset.s==='reset'){ JOB_NEST_BEST={}; SEARCH.msg=''; build({quiet:true}); }
+});
 document.getElementById('btnBack').onclick=()=>{
+  stopSearch();
   document.getElementById('builder').style.display='';
   document.getElementById('assumpCard').style.display='';
   document.getElementById('priceCard').style.display='';
@@ -6652,7 +7276,7 @@ document.getElementById('btnBack').onclick=()=>{
   document.getElementById('btnBack').style.display='none';
   document.getElementById('btnBuild').textContent='Build cut list';
 };
-document.getElementById('btnHome').onclick=()=>showHome(true);
+document.getElementById('btnHome').onclick=()=>{ stopSearch(); showHome(true); };
 document.getElementById('ppPrint').onclick=()=>tryPrint(true);
 document.getElementById('ppSave').onclick=()=>{ if(PACK_HTML) savePrintPack(PACK_HTML); };
 document.getElementById('ppDone').onclick=()=>endPrintPack();
@@ -6687,8 +7311,13 @@ document.getElementById('btnMenu').onclick=async()=>{
   }
   else if(v==='home') showHome(true);
   else if(v==='clear'){
-    if(await uiConfirm('Clear this job?','Every field is reset. Saved projects and the offcut rack are untouched.','Clear',true)){
-      localStorage.removeItem('bbcab'); hardReload();
+    const cur=localStorage.getItem('bbcab_current'), named=!!(cur&&projList()[cur]);
+    if(await uiConfirm('Clear this job?',named
+        ?'Starts a blank job. "'+cur+'" stays saved on Home, and the offcut rack is untouched.'
+        :'Every field is reset. Saved projects and the offcut rack are untouched.','Clear',true)){
+      /* Detach from the project as well. Keeping the name meant the blank job saved
+         straight over it. */
+      localStorage.removeItem('bbcab'); localStorage.removeItem('bbcab_current'); hardReload();
     }
   }
 };
@@ -6712,8 +7341,16 @@ function hasAnythingToBackUp(){
 function showBackupBar(msg){
   document.getElementById('bkmsg').textContent=msg;
   document.getElementById('bkbar').classList.add('on');
+  placeToast();
 }
-function hideBackupBar(){ document.getElementById('bkbar').classList.remove('on'); }
+function hideBackupBar(){ document.getElementById('bkbar').classList.remove('on'); placeToast(); }
+/* v1.25: the toast and the daily backup bar both sat 88px up and covered each other.
+   While the bar is showing, the toast rides above it. */
+function placeToast(){
+  const t=document.getElementById('toast'), bk=document.getElementById('bkbar');
+  if(!t||!bk) return;
+  t.style.bottom=bk.classList.contains('on')?(88+bk.offsetHeight+8)+'px':'';
+}
 function dailyBackup(){
   if(localStorage.getItem(BK_OFF)==='1') return;
   if(!hasAnythingToBackUp()) return;                 // nothing worth a file yet
@@ -6747,14 +7384,19 @@ function dlq(quiet,name,text,type){
   setTimeout(()=>{ URL.revokeObjectURL(u); a.remove(); },1500);
   if(!quiet) toast('Saved '+name+' — choose "Save to Files" to keep it in iCloud.',true);
 }
+/* v1.24: fields are quoted when they need it, so a comma in a material or part name no
+   longer shifts the columns. A job with several cut maps used to fire one download per
+   map, and iOS blocks every download after the first; it is now one file with the cut
+   map named in a trailing Group column. A single-map job exports the same six columns
+   as before. */
 function exportCSV(){
   if(!RESULT) return toast('Build the cut list first.');
-  for(const g of RESULT.groups){
-    const rows=[['Cabinet_ID','Part_Name','Material','Length','Width','Qty']];
-    for(const p of g.parts) rows.push([p.cab,p.name,p.mat,p.L,p.W,p.qty]);
-    const name=RESULT.groups.length>1?g.label.toLowerCase()+'_bom.csv':'project_bom.csv';
-    dl(name,rows.map(r=>r.join(',')).join('\n'),'text/csv');
-  }
+  const q=v=>{ const t=v==null?'':String(v); return /[",\r\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t; };
+  const multi=RESULT.groups.length>1;
+  const rows=[['Cabinet_ID','Part_Name','Material','Length','Width','Qty'].concat(multi?['Group']:[])];
+  for(const g of RESULT.groups)
+    for(const p of g.parts) rows.push([p.cab,p.name,p.mat,p.L,p.W,p.qty].concat(multi?[g.label]:[]));
+  dl('project_bom.csv',rows.map(r=>r.map(q).join(',')).join('\n'),'text/csv');
 }
 function backup(quiet){
   if(!save()) return false;
@@ -6764,27 +7406,88 @@ function backup(quiet){
                      master:JSON.parse(localStorage.getItem(MKEY)||'null'),
                      materials:JSON.parse(localStorage.getItem(MATKEY)||'[]'),
                      material_renames:JSON.parse(localStorage.getItem(MRENAME)||'{}'),
-                     projects:JSON.parse(localStorage.getItem(PKEY)||'{}')}),
+                     projects:JSON.parse(localStorage.getItem(PKEY)||'{}'),
+                     current:localStorage.getItem('bbcab_current'),
+                     app:'Cabinet Planner'}),
      'application/json');
   return true;
+}
+/* v1.24: Restore used to overwrite every project with the backup's copy, without
+   asking, so anything newer than the backup vanished. Projects now merge (the newer
+   copy of each wins, by save time), nothing is written until the summary is confirmed,
+   and a failed write puts everything back. The rack, materials and shop defaults are
+   single records, so those are replaced by the backup's, as the summary says. */
+function mergeBackup(d){
+  const local=projList(), merged={...local};
+  const byLower=new Map(Object.keys(local).map(k=>[k.toLowerCase(),k]));
+  let added=0, updated=0, keptMine=0;
+  for(const [name,e] of Object.entries(d.projects||{})){
+    if(!e||typeof e.job!=='string') continue;
+    const key=byLower.get(name.toLowerCase());
+    if(!key){ merged[name]=e; byLower.set(name.toLowerCase(),name); added++; continue; }
+    if(local[key].job===e.job) continue;
+    if((Date.parse(e.saved)||0)>(Date.parse(local[key].saved)||0)){ merged[key]=e; updated++; }
+    else keptMine++;
+  }
+  /* A backup from v1.13 or earlier has no record of which project was open, and its
+     open job may never have been saved as one. Keep it as its own project rather than
+     let it land on top of something. */
+  let rescued=null;
+  if(!d.current&&d.job&&d.job.state){
+    const js=JSON.stringify(d.job);
+    if(!Object.values(merged).some(e=>e.job===js)){
+      const taken=new Set(Object.keys(merged).map(k=>k.toLowerCase()));
+      let nm='Restored job', i=2; while(taken.has(nm.toLowerCase())) nm='Restored job '+(i++);
+      merged[nm]={saved:new Date().toISOString(),job:js}; rescued=nm;
+    }
+  }
+  return {merged,added,updated,keptMine,rescued};
 }
 function restore(){
   const i=document.createElement('input'); i.type='file'; i.accept='.json,application/json';
   i.onchange=()=>{
     const f=i.files[0]; if(!f) return;
     const r=new FileReader();
-    r.onload=()=>{
+    r.onload=async()=>{
+      const bad=()=>toast("That file isn't a Cabinet Planner backup.");
+      let d; try{ d=JSON.parse(r.result); }catch(e){ return bad(); }
+      const isObj=o=>o&&typeof o==='object'&&!Array.isArray(o);
+      if(!isObj(d)||!['job','offcuts','master','materials','projects'].some(k=>k in d)) return bad();
+      if((d.projects!=null&&!isObj(d.projects))||(d.offcuts!=null&&!Array.isArray(d.offcuts))||
+         (d.materials!=null&&!Array.isArray(d.materials))||(d.master!=null&&!isObj(d.master))) return bad();
+      if(!save()&&!await uiConfirm('Recent edits not saved','Storage is full, so the latest changes to the open job could not be saved first. Restore anyway?','Restore',true)) return;
+      const m=mergeBackup(d);
+      const lines=[];
+      lines.push('Projects: '+m.added+' added, '+m.updated+' replaced by the backup\u2019s newer copy, '+
+        m.keptMine+' kept because yours is newer.');
+      if(m.rescued) lines.push('The job open when the backup was made comes in as "'+m.rescued+'".');
+      const repl=[d.offcuts&&'offcut rack',d.materials&&'materials list',d.master&&'shop defaults'].filter(Boolean);
+      if(repl.length) lines.push('Replaced by the backup: '+repl.join(', ')+'.');
+      if(scratchHasWork()) lines.push('The open job isn\u2019t saved as a project and will be lost.');
+      if(!await uiConfirm('Restore from backup?',lines.join('\n\n'),'Restore',true)) return;
+
+      /* Land on the project that was open here if it survived, else the backup's. */
+      const cur=localStorage.getItem('bbcab_current');
+      const land=(cur&&m.merged[cur])?cur:(d.current&&m.merged[d.current])?d.current:null;
+      const writes=[[PKEY,JSON.stringify(m.merged)]];
+      if(d.offcuts) writes.push(['bbcab_offcuts',JSON.stringify(d.offcuts)]);
+      if(d.master) writes.push([MKEY,JSON.stringify(d.master)]);
+      if(d.materials){
+        writes.push([MATKEY,JSON.stringify(d.materials)]);
+        /* Renames describe that materials list, so they travel with it and only with it. */
+        writes.push([MRENAME,isObj(d.material_renames)?JSON.stringify(d.material_renames):null]);
+      }
+      writes.push(['bbcab',land?m.merged[land].job:null]);
+      writes.push(['bbcab_current',land]);
+      const before=new Map(writes.map(([k])=>[k,localStorage.getItem(k)]));
       try{
-        const d=JSON.parse(r.result);
-        if(d.job) localStorage.setItem('bbcab',JSON.stringify(d.job));
-        if(d.offcuts) localStorage.setItem('bbcab_offcuts',JSON.stringify(d.offcuts));
-        if(d.master) localStorage.setItem(MKEY,JSON.stringify(d.master));
-        if(d.materials) localStorage.setItem(MATKEY,JSON.stringify(d.materials));
-        if(d.material_renames) localStorage.setItem(MRENAME,JSON.stringify(d.material_renames));
-        else localStorage.removeItem(MRENAME);
-        if(d.projects) localStorage.setItem(PKEY,JSON.stringify(d.projects));
-        hardReload();
-      }catch(e){ toast("That file isn't a Cabinet Planner backup."); }
+        for(const [k,v] of writes) v===null?localStorage.removeItem(k):localStorage.setItem(k,v);
+      }catch(e){
+        try{ for(const [k] of writes) localStorage.removeItem(k);
+             for(const [k,v] of before) if(v!==null) localStorage.setItem(k,v); }catch(_){}
+        return toast('Storage is full — nothing was restored. Delete a project or two and try again.');
+      }
+      hardReload();
     };
     r.readAsText(f);
   };
@@ -6802,6 +7505,7 @@ function save(){
     drawer_phase:document.getElementById('drawer_phase').value,
     door_phase:document.getElementById('door_phase').value,
     include:JSON.parse(JSON.stringify(include)),
+    mats:JOB_MATS, matPin:JOB_MAT_PIN, quote:QUOTE, nestBest:JOB_NEST_BEST,
     est:JSON.parse(JSON.stringify(est)),
     timers:JSON.parse(JSON.stringify(timers)),
     off_use:{cab:document.getElementById('off_use_cab').value,
@@ -6812,8 +7516,23 @@ function save(){
              ff:document.getElementById('off_log_ff').value}};
   for(const k of CFG_KEYS) d.cfg[k]=document.getElementById(k).value;
   for(const r of RUNS) d.totals[r]=document.querySelector('.totalw[data-run="'+r+'"]').value;
-  try{ localStorage.setItem('bbcab',JSON.stringify(d)); return true; }
+  const job=JSON.stringify(d);
+  try{ localStorage.setItem('bbcab',job); }
   catch(e){ toast('Storage is full — export a backup first.'); return false; }
+  return syncProject(job);
+}
+/* v1.24: an open project saves itself. The working copy used to be the only thing
+   autosaved, so opening another project or starting a new one threw away every edit
+   since the last tap on Save. A job that has never been saved as a project is left
+   alone here; leaving it asks first (confirmLeaveJob). */
+function syncProject(job){
+  const name=localStorage.getItem('bbcab_current');
+  if(!name) return true;
+  let all; try{ all=JSON.parse(localStorage.getItem(PKEY)||'{}'); }catch(e){ return true; }
+  if(!all[name]||all[name].job===job) return true;
+  all[name]=Object.assign({},all[name],{saved:new Date().toISOString(),job});
+  try{ localStorage.setItem(PKEY,JSON.stringify(all)); return true; }
+  catch(e){ toast('Storage is full — "'+name+'" could not be saved. Export a backup first.'); return false; }
 }
 function load(){
   let d; try{ d=JSON.parse(localStorage.getItem('bbcab')); }catch(e){}
@@ -6830,6 +7549,10 @@ function load(){
   if(d.drawer_phase) document.getElementById('drawer_phase').value=d.drawer_phase;
   if(d.door_phase) document.getElementById('door_phase').value=d.door_phase;
   if(d.include) for(const r of RUNS) Object.assign(include[r],d.include[r]||{});
+  const asObj=o=>o&&typeof o==='object'&&!Array.isArray(o)?o:{};
+  JOB_MATS=asObj(d.mats); JOB_MAT_PIN=asObj(d.matPin);
+  QUOTE=d.quote&&typeof d.quote==='object'&&Number.isFinite(d.quote.total)?d.quote:null;
+  JOB_NEST_BEST=asObj(d.nestBest);
   if(d.timers){ timers.log=d.timers.log||{}; timers.running=d.timers.running||null;
                 timers.startedAt=d.timers.startedAt||0; }
   if(d.est){
@@ -6902,6 +7625,11 @@ document.addEventListener('visibilitychange',()=>{ if(document.hidden) save(); }
 
 /* ================= go ================= */
 const hadJob=load();
+const justCreated=localStorage.getItem(NEWKEY); localStorage.removeItem(NEWKEY);
+/* No working copy but still pointing at a project (left behind by Clear this job in
+   v1.13 and earlier): drop the pointer, or the blank job would autosave over it. */
+if(!hadJob&&localStorage.getItem('bbcab_current')&&localStorage.getItem('bbcab_current')!==justCreated)
+  localStorage.removeItem('bbcab_current');
 if(!hadJob){ for(const r of RUNS){ state[r].cabs=[]; state[r].gaps=[]; } }
 initStockSelects();
 if(!hadJob) applyMaster(readMaster());     // a new job starts from the shop defaults
@@ -6913,10 +7641,18 @@ renderPriceRows(); renderMats();
 syncEstInputs();
 homeInit();
 paintProjBar();
-showHome(!hadJob||!localStorage.getItem('bbcab_current'));
+paintScopeTags();
+const openNew=!hadJob&&!!justCreated&&justCreated===localStorage.getItem('bbcab_current');
+showHome(!(hadJob||openNew)||!localStorage.getItem('bbcab_current'));
 refreshDerived();
 initCounts();
 for(const r of RUNS) setCount(r,state[r].n);
+/* New project: the fields are filled from the shop defaults by now, so write it to
+   the project list straight away. */
+if(openNew){
+  const nm=projList()[justCreated]?uniqueProjectName(justCreated):justCreated;   // never over an existing one
+  projSave(nm,'Started "'+nm+'". It saves as you go.');
+}
 /* Last, because build() reads every field the lines above have just populated. */
 if(pendingBuild&&!document.getElementById('home').classList.contains('on')){
   VIEW=pendingView||'layout';
