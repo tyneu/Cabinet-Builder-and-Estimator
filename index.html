@@ -26,6 +26,7 @@ header{position:sticky;top:0;z-index:40;background:var(--blue-deep);color:#fff;
   display:flex;align-items:baseline;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.18);}
 header h1{font-size:17px;letter-spacing:.02em}
 header .sub{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:#9fc4dc}
+header .ver{font-size:11px;font-weight:600;letter-spacing:.04em;color:#9fc4dc;opacity:.8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card>h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-2);margin-bottom:10px}
 label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin-bottom:3px;font-weight:600}
@@ -424,7 +425,8 @@ body.printing .wrap{padding-bottom:120px}
 </style>
 </head>
 <body>
-<header><h1>Cabinet Planner</h1><span class="sub">Bluebird Woodworking</span></header>
+<!-- Version: bump the last number on every change that ships. -->
+<header><h1>Cabinet Planner</h1><span class="ver">V1.8</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -995,9 +997,11 @@ function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[
    breakdown crosscut, and thousands of seeded trials are pooled and the "Balanced"
    layout is taken. Lines marked [index] are the only departures from v2: the sheet
    size is the material's own (SHEET_W x SHEET_L), a part longer than a half sheet
-   is ripped off a whole sheet before that sheet's breakdown cut, and a regroup pass
-   puts a lone piece back with its own run where a sheet has room. Rack offcuts and
-   boards still use the column packer above. */
+   is ripped off a whole sheet before that sheet's breakdown cut, a run is cut at the
+   piece size with the last piece cut freeing the leftover (EDGE_CUTS; v2 sets the
+   fence to the whole blank first), and a regroup pass puts a lone piece back with its
+   own run where a sheet has room. Rack offcuts and boards still use the column packer
+   above. */
 /* Search depth. A trial costs roughly the square of the part count, so small materials
    get v2 "Standard" (4000 trials) and big ones taper to v2 "Quick" (1200). Too shallow
    a search on a small list falls through to an extra sheet a deeper one avoids. */
@@ -1301,6 +1305,9 @@ const CUTOPT=(()=>{
     });
   }
 
+  /* [index] see applyPlacement; false reproduces v2's cut model exactly */
+  const EDGE_CUTS = true;
+
   function isScrap(rect) {
     return Math.min(rect.w, rect.h) < 4 - EPS || rect.w * rect.h < 144 - EPS;
   }
@@ -1384,24 +1391,33 @@ const CUTOPT=(()=>{
       return id;
     };
 
+    /* [index] Edge cuts. v2 cuts a run's blank out at its own width or length (9 1/4"
+       for three 3" rips) and then breaks it down. At the saw the fence stays at the
+       piece size and the last piece cut frees the leftover, so the blank's last
+       isolating cut is made as one more piece cut instead: the same number of cuts,
+       one fewer fence setting. Grids only, never on a whole open sheet. */
+    const needW = rect.w - bw > EPS, needH = rect.h - bh > EPS;
+    const absorb = !EDGE_CUTS || shape.kind !== 'grid' || rect.open ? null
+      : needW && needH ? (order === 'V' ? 'H' : 'W') : needW ? 'W' : needH ? 'H' : null;
+
     /* 1. isolate the parent blank with guillotine cuts across the panel */
     let dependency = rect.availableAfter;
     const keep = r => { if (r.w > EPS && r.h > EPS) layout.free.push(r); };
     if (order === 'V') {
-      if (rect.w - bw > EPS) {
+      if (rect.w - bw > EPS && absorb !== 'W') {
         dependency = addCut(dependency, 'vertical', bw, rect.w, rect.h, `${tag}: establish ${formatInches(bw)} blank width`, !!rect.open);
         keep({sheet: rect.sheet, x: rect.x + bw + KERF, y: rect.y, w: rect.w - bw - KERF, h: rect.h, availableAfter: dependency, open: rect.open});
       }
-      if (rect.h - bh > EPS) {
+      if (rect.h - bh > EPS && absorb !== 'H') {
         dependency = addCut(dependency, 'horizontal', bh, bw, rect.h, `${tag}: establish ${formatInches(bh)} blank length`);
         keep({sheet: rect.sheet, x: rect.x, y: rect.y + bh + KERF, w: bw, h: rect.h - bh - KERF, availableAfter: dependency});
       }
     } else {
-      if (rect.h - bh > EPS) {
+      if (rect.h - bh > EPS && absorb !== 'H') {
         dependency = addCut(dependency, 'horizontal', bh, rect.w, rect.h, `${tag}: establish ${formatInches(bh)} blank length`);
         keep({sheet: rect.sheet, x: rect.x, y: rect.y + bh + KERF, w: rect.w, h: rect.h - bh - KERF, availableAfter: dependency});
       }
-      if (rect.w - bw > EPS) {
+      if (rect.w - bw > EPS && absorb !== 'W') {
         dependency = addCut(dependency, 'vertical', bw, rect.w, bh, `${tag}: establish ${formatInches(bw)} blank width`);
         keep({sheet: rect.sheet, x: rect.x + bw + KERF, y: rect.y, w: rect.w - bw - KERF, h: bh, availableAfter: dependency});
       }
@@ -1441,6 +1457,43 @@ const CUTOPT=(()=>{
       sheetRef.partCount += lens.length;
       return;
     }
+    if (absorb === 'W') {
+      /* rip every column at the piece width; the last rip frees the leftover */
+      const panelH = order === 'H' && needH ? bh : rect.h;
+      let panelW = rect.w, dep = dependency;
+      const colDeps = [];
+      for (let c = 0; c < cols; c++) {
+        dep = addCut(dep, 'vertical', pw, panelW, panelH, `${tag}: rip ${formatInches(pw)} piece ${c + 1} of ${cols}`);
+        colDeps.push(dep);
+        panelW -= pw + KERF;
+      }
+      keep({sheet: rect.sheet, x: rect.x + bw + KERF, y: rect.y, w: rect.w - bw - KERF, h: panelH, availableAfter: dep});
+      for (let c = 0; c < cols; c++) {
+        let cdep = colDeps[c], colH = bh;
+        for (let r = 0; r < rows - 1; r++) {
+          cdep = addCut(cdep, 'horizontal', ph, pw, colH, `${tag}: crosscut ${formatInches(ph)} — column ${c + 1}, piece ${r + 1} of ${rows}`);
+          colH -= ph + KERF;
+        }
+      }
+    } else if (absorb === 'H') {
+      /* crosscut every row at the piece length; the last crosscut frees the leftover */
+      const panelW = order === 'V' && needW ? bw : rect.w;
+      let panelH = rect.h, dep = dependency;
+      const rowDeps = [];
+      for (let r = 0; r < rows; r++) {
+        dep = addCut(dep, 'horizontal', ph, panelW, panelH, `${tag}: crosscut ${formatInches(ph)} piece ${r + 1} of ${rows}`);
+        rowDeps.push(dep);
+        panelH -= ph + KERF;
+      }
+      keep({sheet: rect.sheet, x: rect.x, y: rect.y + bh + KERF, w: panelW, h: rect.h - bh - KERF, availableAfter: dep});
+      for (let r = 0; r < rows; r++) {
+        let rdep = rowDeps[r], rowW = bw;
+        for (let c = 0; c < cols - 1; c++) {
+          rdep = addCut(rdep, 'vertical', pw, rowW, ph, `${tag}: rip ${formatInches(pw)} — row ${r + 1}, piece ${c + 1} of ${cols}`);
+          rowW -= pw + KERF;
+        }
+      }
+    } else {
     const colDeps = [];
     let panelW = bw;
     let ripDep = dependency;
@@ -1463,6 +1516,7 @@ const CUTOPT=(()=>{
         panelH -= ph + KERF;
         colDeps[c] = dep;
       }
+    }
     }
 
     /* 3. record the pieces */
@@ -1906,10 +1960,12 @@ const CUTOPT=(()=>{
      size, so a sheet can end up with a lone piece away from a run of its own kind that
      had room for it; that piece costs its own cuts, a second trip to the same fence
      setting, and often sets a column width that leaves a sliver beside everything else.
-     Each sheet of the chosen layout is repacked by itself at the same breakdown
-     setting, with every part type offered as one run. A repack is kept only when it
-     leaves fewer lone pieces or runs without adding a cut, scrap or fence change, and
-     the result still has to pass v2's own checks. */
+     Each sheet of the chosen layout (identical sheets together) is repacked at the same
+     breakdown setting with every part type offered as one run, or as the biggest run
+     that fits plus the rest. Repacks that leave fewer
+     lone pieces or runs without adding a cut or scrap on the sheet are then judged on
+     the whole job: the one kept adds no saw pass and no fence change to the full cutting
+     schedule, and the result still has to pass v2's own checks. */
   function cmpKey(a, b) {
     for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > EPS) return a[i] < b[i] ? -1 : 1;
     return 0;
@@ -1930,27 +1986,32 @@ const CUTOPT=(()=>{
       nextCutId: Math.max(0, ...candidate.cuts.map(x => x.id)) + 1,
       nextBatchId: Math.max(0, ...candidate.sheets.flatMap(s => s.placements.map(p => p.batchId))) + 1};
     let current = candidate;
-    candidate.sheets.forEach((sheet, index) => {
-      if (sheet.open) return;
-      const placements = layout.sheets[index].placements;
+    const ordered = sheet => sheet.placements.slice().sort((a, b) => a.typeIndex - b.typeIndex || a.y - b.y || a.x - b.x);
+    const signatureOf = sheet => keyInches(sheet.firstCut) + '#' + ordered(sheet)
+      .map(p => [p.typeIndex, keyInches(p.x), keyInches(p.y), keyInches(p.w), keyInches(p.h)].join(',')).join(';');
+
+    /* Identical sheets are repacked together. Changing one of a matching pair on its
+       own breaks the repeat, and the saw loses the shared setups. */
+
+    const trySet = ({signature, indexes}) => {
+      const index = indexes[0];
+      const sheet = layout.sheets[index];
       const runsOfType = new Map();
-      placements.forEach(p => {
+      sheet.placements.forEach(p => {
         if (!runsOfType.has(p.typeIndex)) runsOfType.set(p.typeIndex, new Set());
         runsOfType.get(p.typeIndex).add(p.batchId);
       });
       if (![...runsOfType.values()].some(set => set.size > 1)) return;
-      const before = sheetStats(placements, layout.free.filter(r => r.sheet === index), layout.cuts.filter(x => x.sheet === index));
+      const before = sheetStats(sheet.placements, layout.free.filter(r => r.sheet === index), layout.cuts.filter(x => x.sheet === index));
 
-      /* Seeded from the sheet itself, so identical sheets repack identically. */
-      const ordered = placements.slice().sort((a, b) => a.typeIndex - b.typeIndex || a.y - b.y || a.x - b.x);
-      const signature = keyInches(sheet.firstCut) + ordered.map(p => [p.typeIndex, keyInches(p.x), keyInches(p.y), keyInches(p.w), keyInches(p.h)].join(',')).join(';');
       let seed = 2166136261;
       for (let i = 0; i < signature.length; i++) seed = Math.imul(seed ^ signature.charCodeAt(i), 16777619);
       const rng = makeRng(seed);
-      const parts = ordered.map(p => ({name: p.name, color: p.color, typeIndex: p.typeIndex, instance: p.instance,
+      const parts = ordered(sheet).map(p => ({name: p.name, color: p.color, typeIndex: p.typeIndex, instance: p.instance,
         w: Math.min(p.w, p.h), h: Math.max(p.w, p.h), area: p.w * p.h}));
 
-      let best = null;
+      /* Only repacks that add no cut and no scrap on the sheet compete. */
+      const found = new Map();
       for (let trial = 0; trial < trials; trial++) {
         const plan = makeBatchPlan(parts, trial, rng);
         const whole = new Map();
@@ -1960,36 +2021,67 @@ const CUTOPT=(()=>{
           if (!whole.has(item.typeIndex)) whole.set(item.typeIndex, []);
           whole.get(item.typeIndex).push(...item.sources);
         });
-        whole.forEach(sources => items.push(makeItem(sources, 0)));
+        /* the whole type as one run first, then the biggest run that fits plus the rest */
+        whole.forEach(sources => {
+          const most = sources.length - (trial % sources.length);
+          let at = 0;
+          chunkQuantity(sources.length, most, false).forEach(size => {
+            items.push(makeItem(sources.slice(at, at + size), 0));
+            at += size;
+          });
+        });
         items.forEach((item, i) => { item.id = i + 1; });
         const trialLayout = attemptPack(orderItems(items, rng, trial), 1, [sheet.firstCut], rng, false, 0);
         if (!trialLayout || trialLayout.sheets[0].partCount !== parts.length) continue;
         const after = sheetStats(trialLayout.sheets[0].placements, trialLayout.free, trialLayout.cuts);
+        if (after.cuts > before.cuts || after.scrap > before.scrap + EPS) continue;
+        if (cmpKey([after.singles, after.runs], [before.singles, before.runs]) >= 0) continue;
         const key = [after.singles, after.runs, after.cuts, after.scrap];
-        if (!best || cmpKey(key, best.key) < 0) best = {key, after, trialLayout};
+        const shape = trialLayout.sheets[0].placements.map(p => [p.typeIndex, keyInches(p.x), keyInches(p.y), keyInches(p.w)].join(',')).sort().join(';');
+        if (!found.has(shape)) found.set(shape, {key, trialLayout});
       }
-      if (!best) return;
-      const {after, trialLayout} = best;
-      if (cmpKey([after.singles, after.runs], [before.singles, before.runs]) >= 0) return;
-      if (after.cuts > before.cuts || after.scrap > before.scrap + EPS) return;
+      if (!found.size) return false;
 
-      const cutOffset = layout.nextCutId - 1, batchOffset = layout.nextBatchId - 1;
-      const mapId = id => id == null ? null : id + cutOffset;
-      const next = {
-        sheets: layout.sheets.map((s, i) => i !== index ? s : {...s, partCount: parts.length,
-          placements: trialLayout.sheets[0].placements.map(p => ({...p, batchId: p.batchId + batchOffset}))}),
-        free: layout.free.filter(r => r.sheet !== index)
-          .concat(trialLayout.free.map(r => ({...r, sheet: index, availableAfter: mapId(r.availableAfter)}))),
-        cuts: layout.cuts.filter(x => x.sheet !== index)
-          .concat(trialLayout.cuts.map(x => ({...x, id: mapId(x.id), parent: mapId(x.parent), sheet: index}))),
-        nextCutId: layout.nextCutId + trialLayout.nextCutId - 1,
-        nextBatchId: layout.nextBatchId + trialLayout.nextBatchId - 1
-      };
+      /* The closest few by sheet are scored against the whole job's cutting schedule. */
+      let best = null;
+      [...found.values()].sort((a, b) => cmpKey(a.key, b.key)).slice(0, 24).forEach(({key, trialLayout}) => {
+      const next = {sheets: layout.sheets.slice(), free: layout.free.filter(r => !indexes.includes(r.sheet)),
+        cuts: layout.cuts.filter(x => !indexes.includes(x.sheet)), nextCutId: layout.nextCutId, nextBatchId: layout.nextBatchId};
+      indexes.forEach(target => {
+        /* each copy keeps its own pieces: matched to the first sheet's by position */
+        const own = ordered(layout.sheets[target]);
+        const asPlaced = new Map(ordered(sheet).map((p, i) => [p.typeIndex + ':' + p.instance, own[i].instance]));
+        const cutOffset = next.nextCutId - 1, batchOffset = next.nextBatchId - 1;
+        const mapId = id => id == null ? null : id + cutOffset;
+        next.sheets[target] = {...layout.sheets[target], partCount: parts.length,
+          placements: trialLayout.sheets[0].placements.map(p => ({...p,
+            instance: asPlaced.get(p.typeIndex + ':' + p.instance), batchId: p.batchId + batchOffset}))};
+        next.free.push(...trialLayout.free.map(r => ({...r, sheet: target, availableAfter: mapId(r.availableAfter)})));
+        next.cuts.push(...trialLayout.cuts.map(x => ({...x, id: mapId(x.id), parent: mapId(x.parent), sheet: target})));
+        next.nextCutId += trialLayout.nextCutId - 1;
+        next.nextBatchId += trialLayout.nextBatchId - 1;
+      });
       const evaluated = evaluateLayout(next, partArea, 12, 45, makeRng(13579), 6);
-      if (!evaluated || evaluated.fenceChanges > current.fenceChanges) return;
-      layout = next;
-      current = evaluated;
-    });
+      if (!evaluated || evaluated.fenceChanges > current.fenceChanges || evaluated.cutCount > current.cutCount) return;
+      const rank = [evaluated.fenceChanges, evaluated.cutCount, ...key];
+      if (!best || cmpKey(rank, best.rank) < 0) best = {rank, next, evaluated};
+      });
+      if (!best) return false;
+      layout = best.next;
+      current = best.evaluated;
+      return true;
+    };
+    /* A second sweep, because settling one set can clear the way for another. */
+    for (let sweep = 0; sweep < 2; sweep++) {
+      const sweepSets = [];
+      layout.sheets.forEach((sheet, index) => {
+        if (sheet.open) return;
+        const signature = signatureOf(sheet);
+        const set = sweepSets.find(x => x.signature === signature);
+        if (set) set.indexes.push(index); else sweepSets.push({signature, indexes: [index]});
+      });
+      if (!sweepSets.map(trySet).some(Boolean)) break;
+    }
     if (current === candidate || !validateCandidate(current, v2parts).ok) return candidate;
     current.regrouped = true;
     return current;
