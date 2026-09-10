@@ -197,10 +197,6 @@ input[inputmode]{font-variant-numeric:tabular-nums}
 .matkind small{font-size:9px;letter-spacing:.04em;color:var(--ink-2);text-transform:none;font-weight:400}
 .matrow{display:flex;align-items:center;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
 .matrow>div:first-child{flex:1}
-.ocmat{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
-  border:1px solid var(--line-hard);border-radius:16px;padding:5px 10px;background:#fff;color:var(--ink-2)}
-.ocmat small{font-weight:500;font-size:10px;color:var(--ink-2)}
-.ocmat button{border:none;background:none;padding:0 0 0 2px;font-size:14px;color:var(--red);font-weight:700}
 #home{display:none}
 #home.on{display:block}
 .mtag{font-size:9px;background:var(--amber);color:#fff;border-radius:9px;padding:2px 7px;
@@ -213,12 +209,6 @@ input[inputmode]{font-variant-numeric:tabular-nums}
 .projrow button{padding:6px 12px;font-size:12px;border-radius:16px;border:1px solid var(--blue);
   background:#fff;color:var(--blue);font-weight:650}
 .projrow .del{border-color:var(--line-hard);color:var(--ink-2)}
-.dbrow{display:grid;grid-template-columns:1fr 54px 54px 46px;gap:6px;align-items:center;
-  padding:6px 0;border-bottom:1px solid #e6eaee;font-size:12px}
-.dbrow:last-child{border-bottom:none}
-.dbrow b{font-weight:650}
-.dbrow span{font-variant-numeric:tabular-nums;text-align:right;color:var(--ink-2)}
-.dbrow .ns{font-size:10px;color:var(--blue);text-align:right}
 .incblock{margin-bottom:10px}
 .incblock:last-of-type{margin-bottom:0}
 .incrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;padding-left:4px}
@@ -426,7 +416,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump the last number by 1 on every change that ships (v1.10, v1.11, v1.12, ...). -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.12</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.13</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -948,10 +938,9 @@ function offcutsFromFree(placements,free,material,tierFn){
   return [placements,offs];
 }
 
-function guillotineColumns(cols,bw,bl,material,freeInit,cutY){
+function guillotineColumns(cols,bw,bl){
   const placements=[];
-  if(cutY!=null) placements.push({name:'mid-cut-barrier',x:0,y:cutY,w:bw,h:KERF,kind:'cut-line'});
-  let free=freeInit?[...freeInit]:[[0,0,bw,bl]];
+  let free=[[0,0,bw,bl]];
   const placedCols=[], leftover=[];
   const sorted=[...cols].sort((a,b)=>b.w*colH(b)-a.w*colH(a));
   for(const col of sorted){
@@ -1920,7 +1909,7 @@ const CUTOPT=(()=>{
     }, null).candidate;
   }
 
-  function uniqueCandidates(minPool, extraPool, substantialSeconds) {
+  function uniqueCandidates(minPool) {
     const out = [];
     const push = (label, candidate, note) => {
       if (!candidate || out.some(x => x.candidate.signature === candidate.signature &&
@@ -1940,19 +1929,7 @@ const CUTOPT=(()=>{
       a.unmatchedParts - b.unmatchedParts || b.largestBatch - a.largestBatch ||
       b.averageBatch - a.averageBatch || a.cutCount - b.cutCount)[0], 'Longest common cutting runs');
     push('Best offcuts', [...minPool].sort((a, b) => a.offcutCount - b.offcutCount || b.largestOffcut - a.largestOffcut || a.wasteArea - b.wasteArea)[0], 'Consolidated remnants');
-    if (extraPool.length) {
-      const fastest = [...extraPool].sort((a, b) => a.timeSeconds - b.timeSeconds || a.wasteArea - b.wasteArea)[0];
-      const savings = balanced.timeSeconds - fastest.timeSeconds;
-      if (savings >= substantialSeconds) push('+1 sheet: faster', fastest, `${formatDuration(savings)} estimated savings`);
-      else push('+1 sheet comparison', fastest, `${formatDuration(Math.max(0, savings))} estimated savings`);
-    }
     return out;
-  }
-
-  function formatDuration(seconds) {
-    const minutes = Math.floor(seconds / 60);
-    const secs = Math.round(seconds % 60);
-    return minutes ? `${minutes}m ${secs}s` : `${secs}s`;
   }
 
   /* ---------------------------------------------------------------- index */
@@ -2133,16 +2110,14 @@ const CUTOPT=(()=>{
       }
       if (pool.length) break;
     }
-    const pick = pool.length ? uniqueCandidates(pool, [], 0).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
+    const pick = pool.length ? uniqueCandidates(pool).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
     if (!pick) throw new Error('no valid sheet layout found');
 
     const c = regroupSheets(pick.candidate, v2parts);
     const idOf = new Map(v2parts.map(p => [p.typeIndex + ':' + p.instance, p.id]));
     const sheets = c.sheets.map(sheet => {
       const out = sheet.placements.map(p => ({
-        name: p.name, id: idOf.get(p.typeIndex + ':' + p.instance), x: p.x, y: p.y, w: p.w, h: p.h, kind: 'part',
-        batchId: p.batchId, batchSize: p.batchSize, batchRows: p.batchRows, batchCols: p.batchCols, batchKind: p.batchKind,
-        batchX: p.batchX, batchY: p.batchY, batchW: p.batchW, batchH: p.batchH
+        name: p.name, id: idOf.get(p.typeIndex + ':' + p.instance), x: p.x, y: p.y, w: p.w, h: p.h, kind: 'part'
       }));
       c.free.filter(r => r.sheet === sheet.index).forEach(r =>
         out.push({name: '', x: r.x, y: r.y, w: r.w, h: r.h, kind: 'offcut', tier: tier(r.w, r.h)}));
@@ -2155,13 +2130,11 @@ const CUTOPT=(()=>{
     return {
       sheets, label: pick.label, longNames,
       openSheets: c.sheets.filter(s => s.placements.some(p => Math.max(p.w, p.h) > halfMax() + EPS)).length,
-      metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges, batches: c.batchCount, matchedParts: c.matchedParts,
-        unmatchedParts: c.unmatchedParts, repeatedSheets: c.repeatedSheets, wasteArea: c.wasteArea,
-        scrapArea: c.scrapArea, kerfArea: c.kerfArea}
+      metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges}
     };
   }
 
-  return {nest, buildTrial, addToPool, uniqueCandidates, validateCandidate, candidateFirstCuts, makeRng, halfMax};
+  return {nest};
 })();
 
 function packMaterial(material,matParts,stockOffcuts){
@@ -2173,7 +2146,7 @@ function packMaterial(material,matParts,stockOffcuts){
   for(const o of avail){
     if(!remaining.length) break;
     const cols=columnsForBin(remaining,o.w,o.l,null);
-    let [pl,placedCols,,free]=guillotineColumns(cols,o.w,o.l,material,null,null);
+    let [pl,placedCols,,free]=guillotineColumns(cols,o.w,o.l);
     const placed=placedCols.flatMap(([c])=>c.parts);
     if(placed.length){
       const [plo,of]=offcutsFromFree(pl,free,material);
@@ -2208,7 +2181,7 @@ function packMaterial(material,matParts,stockOffcuts){
     return {placements:a.sh,w:SHEET_W,l:SHEET_L,runs:a.runs,
       label:a.runs>1?`Sheets ${from}\u2013${upTo}/${sheets.length} \u00b7 run this layout \u00d7${a.runs}`:`Sheet ${from}/${sheets.length}`};
   }).concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
-  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize,unplaced,
+  return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,unplaced,
           openSheets,longNames};
 }
 
@@ -2233,7 +2206,7 @@ function packBoardSeg(remaining,bw,bl,material){
     const omap={}; shapes.forEach(k=>omap[k]=mode);
     const cols=columnsForBin(remaining,bw,bl,omap);
     if(!cols.length) continue;
-    const [pl,placedCols,,free]=guillotineColumns(cols,bw,bl,material,null,null);
+    const [pl,placedCols,,free]=guillotineColumns(cols,bw,bl);
     const placed=placedCols.flatMap(([c])=>c.parts);
     if(!placed.length) continue;
     const [plo]=offcutsFromFree(pl.slice(),free,material,boardTier);
@@ -2245,15 +2218,6 @@ function packBoardSeg(remaining,bw,bl,material){
     if(!best||cmpArr(key,best.key)<0) best={key,pl:plo,placed,scrap};
   }
   return best;
-}
-function boardPieces(len){
-  const out=[]; let rem=len;
-  while(rem>1){
-    const cut=Math.min(RIP_MAX,rem);
-    out.push(r4(cut));
-    rem=r4(rem-cut-KERF);
-  }
-  return out;
 }
 /* A board is worked in pieces no longer than the crosscut limit, but the crosscut
    falls where the work actually ends, not at the limit. Cutting at a round 60" when
@@ -2850,7 +2814,7 @@ const el=(tag,cls,html)=>{ const e=document.createElement(tag);
    drawing on a leader pointing at the gap they belong to. */
 let ELEV={upper:null,lower:null};
 const ELEV_MINW=170, ELEV_SMIN=5, ELEV_SMAX=14;
-const ELEV_KICKMIN=22, ELEV_CTMIN=16, ELEV_GUT=34;
+const ELEV_KICKMIN=22, ELEV_CTMIN=16;
 
 function runGeom(run){
   let cfg;
@@ -3312,23 +3276,6 @@ function syncElev(run){
 function refreshElev(){ for(const r of RUNS) syncElev(r); }
 function queueElev(){ clearTimeout(window._pv); window._pv=setTimeout(refreshElev,110); }
 
-function drawerPreview(run,i){
-  let cfg; try{ cfg=runCfg(run,readCfg()); }catch(e){ return null; }
-  const st=state[run], c=st.cabs[i], D=st.def;
-  const H=parseFrac((c.h||'').trim()||D.h);
-  const W=parseFrac((c.w||'').trim()||D.w);
-  if(H===null||isNaN(H)) return null;
-  const n=parseInt((c.shelves!==''&&c.shelves!=null)?c.shelves:D.s)||0;
-  if(!n) return null;
-  const constr=c.constr||D.c||'Frameless', mount=c.mount||D.m||'Overlay';
-  const S=frontSpan(run,(W===null||isNaN(W))?24:W,H,constr,mount,cfg);
-  if(S.spanH<=0) return null;
-  const typed=[]; for(let k=0;k<n;k++) typed.push(parseFrac((c.dh||[])[k]));
-  const s=splitHeights(S.spanH,n,typed,cfg);
-  return s.heights||null;
-}
-
-
 /* A run can override the shop defaults for its own frames and doors, so a kitchen
    with 3" frames upstairs and 2" below needs no trips into Shop defaults. Blank
    means inherit. */
@@ -3428,7 +3375,6 @@ const LW=(a,b)=>[r4(Math.max(a,b)),r4(Math.min(a,b))];
 
 function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
   const insideW=W-cfg.width_deduction;
-  const backDed=2*cfg.ply_thickness;
   const p=[];
   const push=(name,mat,a,b,qty)=>{const [L,Wd]=LW(a,b); p.push({name,mat,L,W:Wd,qty});};
   if(typ==='upper'){
@@ -3450,7 +3396,7 @@ function cabinetParts(typ,W,H,D,shelves,cfg,interior,hasBack,constr,mount,dh){
     if(kind==='Shelves'&&shelves>0)
       push('Adjustable Shelf',cfg.shelf_stock,W-cfg.shelf_width_deduction,D-shelfDepthDed,shelves);
     if(kind==='Drawers'&&shelves>0){
-      const n=shelves, t=cfg.drawer_side_thickness, dd=cfg.drawer_dado_depth;
+      const n=shelves, t=cfg.drawer_side_thickness;
       const openW=faceFrame?(W-cfg.face_frame_width):(W-2*cfg.ply_thickness);
       const boxW=openW-cfg.drawer_slide_clearance;
       const gain=(faceFrame&&(mount||'Overlay')==='Overlay')?cfg.face_frame_thickness:0;
@@ -3745,7 +3691,7 @@ function toeKickParts(R,cfg){
 /* One frame per run: 2 end stiles, top and bottom rails, and a stile at each intersection.
    End stiles are centred on the outer face of the end cabinets, so the frame runs
    half a stile wide at each end for scribing. */
-function faceFrameSeg(run,R,seg,cfg,tag,fit){
+function faceFrameSeg(run,seg,cfg,tag,fit){
   const N=seg.cabs.length;
   if(!N) return null;
   const ff=cfg.face_frame_width;
@@ -3836,7 +3782,7 @@ function faceFrameSegments(R){
 function faceFrameParts(run,R,cfg){
   const segs=faceFrameSegments(R);
   const base=run==='upper'?'FF-U':'FF-L';
-  return segs.map((seg,i)=>faceFrameSeg(run,R,seg,cfg,segs.length>1?base+(i+1):base,{
+  return segs.map((seg,i)=>faceFrameSeg(run,seg,cfg,segs.length>1?base+(i+1):base,{
       fitL:seg.start===0&&!!R.fitL, sL:R.scribeL,
       fitR:seg.end===R.cabs.length-1&&!!R.fitR, sR:R.scribeR
     })).filter(Boolean);
@@ -4401,7 +4347,7 @@ function stickSVG(st,cfg){
   let e='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+(W+2*M)+' '+H+'" font-family="-apple-system,Arial,sans-serif">';
   e+='<rect x="'+M+'" y="8" width="'+W+'" height="30" fill="#fbfbfb" stroke="#000" stroke-width="1.5"/>';
   let x=M;
-  st.cuts.forEach((c,i)=>{
+  st.cuts.forEach(c=>{
     const w=c.len*scale;
     e+='<rect x="'+x.toFixed(1)+'" y="8" width="'+w.toFixed(1)+'" height="30" fill="'+colorFor(c.name)+'" stroke="#333" stroke-width="0.8"/>';
     if(c.rip>1/64)
@@ -4547,10 +4493,8 @@ function sheetSVG(panel,board){
   const M=board?26:52, RM=board?(16+ORD.ncol*ORD_COL):10, BOT=board?24:8;
   const W=panel.w*S, H=panel.l*S;
   const vw=M+W+RM, vh=TOP+H+BOT;
-  /* keep/trash aliases preserve old in-memory results, but every discarded
-     remainder is now displayed as the same red Scrap category. */
-  const TF={inventory:'#dcedc8',scrap:'#f7d6d6',keep:'#f7d6d6',trash:'#f7d6d6'};
-  const TS={inventory:'#8bb99a',scrap:'#d99999',keep:'#d99999',trash:'#d99999'};
+  const TF={inventory:'#dcedc8',scrap:'#f7d6d6'};
+  const TS={inventory:'#8bb99a',scrap:'#d99999'};
   /* In the print pack every board svg is given the same height, and a board whose
      drawing is narrower than that box gets letterboxed. Centred, that floats each
      board to a different height down the page; pinned to the top of its box they all
@@ -4563,7 +4507,7 @@ function sheetSVG(panel,board){
     if(pl.kind==='cut-line') continue;
     const px=M+pl.x*S, py=TOP+pl.y*S, pw=pl.w*S, ph=pl.h*S;
     if(pl.kind==='offcut'){
-      const t=pl.tier||'keep';
+      const t=pl.tier||'scrap';
       e+='<rect x="'+px.toFixed(1)+'" y="'+py.toFixed(1)+'" width="'+pw.toFixed(1)+'" height="'+ph.toFixed(1)+
         '" fill="'+TF[t]+'" stroke="'+TS[t]+'" stroke-width="1" stroke-dasharray="5 3"/>';
       if(pw>44&&ph>26){
@@ -5131,7 +5075,7 @@ function drawRunAssembly(run,Rn,cfg,opts){
   return svgBox(DW,by+26,g);
 }
 
-function drawRunPlan(run,Rn,cfg){
+function drawRunPlan(Rn,cfg){
   const cabs=Rn.cabs, n=cabs.length;
   const span=cabs.reduce((a,c)=>a+c.w,0)+Rn.gaps.reduce((a,b)=>a+b,0);
   const sL=Rn.scribeL??Rn.scribe, sR=Rn.scribeR??Rn.scribe;
@@ -5231,7 +5175,7 @@ function drawCabinet(c,cfg){
 }
 
 /* Every part in the cabinet, to scale, with its dados marked. */
-function drawParts(parts,cfg,noteFor){
+function drawParts(parts,noteFor){
   const maxL=Math.max(...parts.map(p=>p.L));
   const s=Math.min((DW-150)/maxL,2.6);
   let y=8, g='';
@@ -5303,7 +5247,7 @@ function drawDrawerBox(bw,bd,bh,cfg,label){
    The whole assembly flat on the bench: end stiles, rails between them, and a mid
    stile at every seam. Ballooned to a parts table, and the mid stiles are given as
    running dimensions off the left edge so the frame can be set out with a tape. */
-function drawFaceFrame(f,cfg){
+function drawFaceFrame(f){
   const M=58, TOPM=30;                    // room for the height dimension on the left
   const s=Math.min((DW-M-30)/f.frameW, 128/f.frameH);
   const W=f.frameW*s, H=f.frameH*s;
@@ -5376,7 +5320,7 @@ function viewFrames(body,sum){
     h+='<div class="dwg"><h4>'+f.tag+' &middot; '+(f.run==='upper'?'upper':'lower')+' run</h4>'+
        '<div class="dwgsub">'+fmt(f.frameW)+'" &times; '+fmt(f.frameH)+'" &middot; covers '+f.ids.join(', ')+
        (f.fitL||f.fitR?' &middot; fitted to the wall':'')+'</div>'+
-       drawFaceFrame(f,(RESULT.runCfg&&RESULT.runCfg[f.run])||cfg)+frameTable(f);
+       drawFaceFrame(f)+frameTable(f);
     const notes=[];
     if(f.fitL) notes.push('The left end stile is cut to '+fmt(f.lStile)+'" to close the measured gap.');
     if(f.fitR) notes.push('The right end stile is cut to '+fmt(f.rStile)+'".');
@@ -5408,7 +5352,7 @@ function viewBuild(body,sum,run){
     '<div>Run<b>'+fmt(Rn.total)+'"</b></div>';
   const RCr=(RESULT.runCfg&&RESULT.runCfg[run])||cfg;
   let h='<div class="dwg"><h4>Run front view</h4>'+drawRunAssembly(run,Rn,RCr)+'</div>';
-  h+='<div class="dwg"><h4>Run top view</h4>'+drawRunPlan(run,Rn,RCr)+'</div>';
+  h+='<div class="dwg"><h4>Run top view</h4>'+drawRunPlan(Rn,RCr)+'</div>';
   uni.forEach((u,i)=>{
     const c=u.c;
     h+='<div class="dwg"><h4>Build '+(i+1)+' &middot; '+u.ids.join(', ')+'</h4>'+
@@ -5419,7 +5363,7 @@ function viewBuild(body,sum,run){
     const parts=cabinetParts(c.run,c.w,c.h,c.d,c.shelves,RCr,c.interior,c.back,c.constr,c.mount,c.dh)
       .filter(p=>p.name.indexOf('Drawer ')!==0);
     const insetv=c.run==='upper'?RCr.upper_panel_inset:RCr.lower_panel_inset;
-    h+=drawParts(parts,RCr,p=>{
+    h+=drawParts(parts,p=>{
       if(p.name==='Side Panel') return [insetv,p.L-insetv];
       return null;
     });
@@ -5450,7 +5394,7 @@ function viewDoors(body,sum){
        '<div class="dwgsub">'+fmt(dv.w)+'" &times; '+fmt(dv.h)+'" &middot; '+dv.ids.join(', ')+'</div>'+
        drawShaker(dv.w,dv.h,(RESULT.runCfg&&RESULT.runCfg[dv.run])||cfg,'x'+dv.n);
     const DC=(RESULT.runCfg&&RESULT.runCfg[dv.run])||cfg;
-    h+=drawParts(shakerParts('','Door',dv.w,dv.h,dv.n,DC).map(p=>({...p})),DC,null);
+    h+=drawParts(shakerParts('','Door',dv.w,dv.h,dv.n,DC).map(p=>({...p})),null);
     h+='</div>';
   });
   body.innerHTML=h;
@@ -5529,10 +5473,6 @@ function sheetBtns(box,close,btns){
     row.append(el);
   }
   box.append(row);
-}
-function uiAlert(title,msg){
-  return uiSheet((box,close)=>{ sheetHead(box,title,msg);
-    sheetBtns(box,close,[{label:'OK',v:true,kind:'go'}]); });
 }
 function uiConfirm(title,msg,okLabel,danger){
   return uiSheet((box,close)=>{ sheetHead(box,title,msg);
@@ -5901,29 +5841,6 @@ function projOpen(name){
   localStorage.setItem('bbcab_current',name);
   hardReload();
 }
-async function projMenu(){
-  const all=projList(), names=Object.keys(all).sort();
-  const items=names.map(n=>({v:'open:'+n,label:n,
-    sub:new Date(all[n].saved).toLocaleDateString()+(n===currentProject()?' · open':'')}));
-  items.push({v:'save',label:'Save this job',sub:'as "'+currentProject()+'"'});
-  items.push({v:'name',label:'Rename this job'});
-  if(names.length) items.push({v:'del',label:'Delete a project',danger:true});
-  const v=await uiMenu('Projects',items,names.length?null:'Nothing saved yet.');
-  if(!v) return;
-  if(v==='save') return projSave(currentProject());
-  if(v==='name') return renameProject();
-  if(v==='del'){
-    const d=await uiMenu('Delete which?',names.map(n=>({v:n,label:n,danger:true})));
-    if(!d) return;
-    if(!await uiConfirm('Delete "'+d+'"?','This cannot be undone.','Delete',true)) return;
-    const l=projList(); delete l[d]; localStorage.setItem(PKEY,JSON.stringify(l));
-    toast('Deleted "'+d+'".',true);
-    if(document.getElementById('home').classList.contains('on')) renderHome();
-    return;
-  }
-  if(v.indexOf('open:')===0) projOpen(v.slice(5));
-}
-
 /* ================= print pack ================= */
 /* Printing normally only catches the tab you are on. This renders every tab into
    a hidden container so the whole package comes out in one go. */
