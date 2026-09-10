@@ -994,8 +994,9 @@ function cmpArr(a,b){ for(let i=0;i<Math.max(a.length,b.length);i++){ const x=a[
    from one parent blank with repeated fence settings, every sheet gets its 36"-60"
    breakdown crosscut, and thousands of seeded trials are pooled and the "Balanced"
    layout is taken. Lines marked [index] are the only departures from v2: the sheet
-   size is the material's own (SHEET_W x SHEET_L) and a part longer than a half sheet
-   is ripped off a whole sheet before that sheet's breakdown cut. Rack offcuts and
+   size is the material's own (SHEET_W x SHEET_L), a part longer than a half sheet
+   is ripped off a whole sheet before that sheet's breakdown cut, and a regroup pass
+   puts a lone piece back with its own run where a sheet has room. Rack offcuts and
    boards still use the column packer above. */
 /* Search depth. A trial costs roughly the square of the part count, so small materials
    get v2 "Standard" (4000 trials) and big ones taper to v2 "Quick" (1200). Too shallow
@@ -1901,6 +1902,99 @@ const CUTOPT=(()=>{
 
   /* ---------------------------------------------------------------- index */
 
+  /* [index] Regroup pass. Each v2 trial chops a part's quantity into runs of varying
+     size, so a sheet can end up with a lone piece away from a run of its own kind that
+     had room for it; that piece costs its own cuts, a second trip to the same fence
+     setting, and often sets a column width that leaves a sliver beside everything else.
+     Each sheet of the chosen layout is repacked by itself at the same breakdown
+     setting, with every part type offered as one run. A repack is kept only when it
+     leaves fewer lone pieces or runs without adding a cut, scrap or fence change, and
+     the result still has to pass v2's own checks. */
+  function cmpKey(a, b) {
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > EPS) return a[i] < b[i] ? -1 : 1;
+    return 0;
+  }
+
+  function sheetStats(placements, sheetFree, sheetCuts) {
+    return {
+      singles: placements.filter(p => p.batchSize === 1).length,
+      runs: new Set(placements.map(p => p.batchId)).size,
+      cuts: sheetCuts.length,
+      scrap: sheetFree.filter(isScrap).reduce((sum, r) => sum + r.w * r.h, 0)
+    };
+  }
+
+  function regroupSheets(candidate, v2parts, trials = 300) {
+    const partArea = v2parts.reduce((sum, p) => sum + p.area, 0);
+    let layout = {sheets: candidate.sheets, free: candidate.free, cuts: candidate.cuts,
+      nextCutId: Math.max(0, ...candidate.cuts.map(x => x.id)) + 1,
+      nextBatchId: Math.max(0, ...candidate.sheets.flatMap(s => s.placements.map(p => p.batchId))) + 1};
+    let current = candidate;
+    candidate.sheets.forEach((sheet, index) => {
+      if (sheet.open) return;
+      const placements = layout.sheets[index].placements;
+      const runsOfType = new Map();
+      placements.forEach(p => {
+        if (!runsOfType.has(p.typeIndex)) runsOfType.set(p.typeIndex, new Set());
+        runsOfType.get(p.typeIndex).add(p.batchId);
+      });
+      if (![...runsOfType.values()].some(set => set.size > 1)) return;
+      const before = sheetStats(placements, layout.free.filter(r => r.sheet === index), layout.cuts.filter(x => x.sheet === index));
+
+      /* Seeded from the sheet itself, so identical sheets repack identically. */
+      const ordered = placements.slice().sort((a, b) => a.typeIndex - b.typeIndex || a.y - b.y || a.x - b.x);
+      const signature = keyInches(sheet.firstCut) + ordered.map(p => [p.typeIndex, keyInches(p.x), keyInches(p.y), keyInches(p.w), keyInches(p.h)].join(',')).join(';');
+      let seed = 2166136261;
+      for (let i = 0; i < signature.length; i++) seed = Math.imul(seed ^ signature.charCodeAt(i), 16777619);
+      const rng = makeRng(seed);
+      const parts = ordered.map(p => ({name: p.name, color: p.color, typeIndex: p.typeIndex, instance: p.instance,
+        w: Math.min(p.w, p.h), h: Math.max(p.w, p.h), area: p.w * p.h}));
+
+      let best = null;
+      for (let trial = 0; trial < trials; trial++) {
+        const plan = makeBatchPlan(parts, trial, rng);
+        const whole = new Map();
+        const items = [];
+        plan.forEach(item => {
+          if (item.kind !== 'grid') { items.push(item); return; }
+          if (!whole.has(item.typeIndex)) whole.set(item.typeIndex, []);
+          whole.get(item.typeIndex).push(...item.sources);
+        });
+        whole.forEach(sources => items.push(makeItem(sources, 0)));
+        items.forEach((item, i) => { item.id = i + 1; });
+        const trialLayout = attemptPack(orderItems(items, rng, trial), 1, [sheet.firstCut], rng, false, 0);
+        if (!trialLayout || trialLayout.sheets[0].partCount !== parts.length) continue;
+        const after = sheetStats(trialLayout.sheets[0].placements, trialLayout.free, trialLayout.cuts);
+        const key = [after.singles, after.runs, after.cuts, after.scrap];
+        if (!best || cmpKey(key, best.key) < 0) best = {key, after, trialLayout};
+      }
+      if (!best) return;
+      const {after, trialLayout} = best;
+      if (cmpKey([after.singles, after.runs], [before.singles, before.runs]) >= 0) return;
+      if (after.cuts > before.cuts || after.scrap > before.scrap + EPS) return;
+
+      const cutOffset = layout.nextCutId - 1, batchOffset = layout.nextBatchId - 1;
+      const mapId = id => id == null ? null : id + cutOffset;
+      const next = {
+        sheets: layout.sheets.map((s, i) => i !== index ? s : {...s, partCount: parts.length,
+          placements: trialLayout.sheets[0].placements.map(p => ({...p, batchId: p.batchId + batchOffset}))}),
+        free: layout.free.filter(r => r.sheet !== index)
+          .concat(trialLayout.free.map(r => ({...r, sheet: index, availableAfter: mapId(r.availableAfter)}))),
+        cuts: layout.cuts.filter(x => x.sheet !== index)
+          .concat(trialLayout.cuts.map(x => ({...x, id: mapId(x.id), parent: mapId(x.parent), sheet: index}))),
+        nextCutId: layout.nextCutId + trialLayout.nextCutId - 1,
+        nextBatchId: layout.nextBatchId + trialLayout.nextBatchId - 1
+      };
+      const evaluated = evaluateLayout(next, partArea, 12, 45, makeRng(13579), 6);
+      if (!evaluated || evaluated.fenceChanges > current.fenceChanges) return;
+      layout = next;
+      current = evaluated;
+    });
+    if (current === candidate || !validateCandidate(current, v2parts).ok) return candidate;
+    current.regrouped = true;
+    return current;
+  }
+
   /* [index] Nest one material's parts ({id, L, S, name}, every one fits the sheet) and
      hand back the v2 "Balanced" layout in the cut map's placement format. Identical
      parts (same name and size) are one v2 part type, so they batch together. */
@@ -1943,7 +2037,7 @@ const CUTOPT=(()=>{
     const pick = pool.length ? uniqueCandidates(pool, [], 0).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
     if (!pick) throw new Error('no valid sheet layout found');
 
-    const c = pick.candidate;
+    const c = regroupSheets(pick.candidate, v2parts);
     const idOf = new Map(v2parts.map(p => [p.typeIndex + ':' + p.instance, p.id]));
     const sheets = c.sheets.map(sheet => {
       const out = sheet.placements.map(p => ({
@@ -2000,8 +2094,21 @@ function packMaterial(material,matParts,stockOffcuts){
       if(p.kind==='offcut'&&p.tier==='inventory')
         newOffcuts.push({material,l:r4(Math.max(p.w,p.h)),w:r4(Math.min(p.w,p.h))});
   }
-  const panels=sheets.map((sh,i)=>({placements:sh,w:SHEET_W,l:SHEET_L,label:`Sheet ${i+1}/${sheets.length}`}))
-    .concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
+  /* Identical sheets are drawn once and say how many to run. The sheet count, the
+     estimate and the banked offcuts above still come from every sheet. */
+  const sheetKey=sh=>sh.map(p=>[p.kind,p.name,Math.round(p.x*64),Math.round(p.y*64),
+    Math.round(p.w*64),Math.round(p.h*64)].join(',')).sort().join(';');
+  const alike=[];
+  for(const sh of sheets){
+    const key=sheetKey(sh), same=alike.find(a=>a.key===key);
+    if(same) same.runs++; else alike.push({key,sh,runs:1});
+  }
+  let upTo=0;
+  const panels=alike.map(a=>{
+    const from=upTo+1; upTo+=a.runs;
+    return {placements:a.sh,w:SHEET_W,l:SHEET_L,runs:a.runs,
+      label:a.runs>1?`Sheets ${from}\u2013${upTo}/${sheets.length} \u00b7 run this layout \u00d7${a.runs}`:`Sheet ${from}/${sheets.length}`};
+  }).concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
   return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,oversize,unplaced,
           openSheets,longNames};
 }
