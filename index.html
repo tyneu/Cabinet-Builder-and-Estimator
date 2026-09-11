@@ -31,6 +31,12 @@ header .header-project{display:none;flex:0 0 100%;min-width:0;margin-top:1px;
   color:#dcecf6;font-size:12px;font-weight:600;line-height:1.25;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 body.project-open header .header-project{display:block}
+.mapgroup{border:1px solid var(--line);border-radius:10px;margin:14px 0;background:#fff;overflow:hidden}
+.mapgroup>summary{cursor:pointer;list-style:none;padding:10px 12px;font-size:14px;font-weight:700;color:var(--blue-deep);background:#f6f9fb}
+.mapgroup>summary::-webkit-details-marker{display:none}
+.mapgroup>summary:after{content:' ▸';color:var(--blue);float:right}
+.mapgroup[open]>summary:after{content:' ▾'}
+.mapgroupbody{padding:10px 12px 0}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card>h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-2);margin-bottom:10px}
 label{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin-bottom:3px;font-weight:600}
@@ -193,7 +199,7 @@ input[inputmode]{font-variant-numeric:tabular-nums}
 .ocrow:last-child{border-bottom:none}
 .ocrow .oc1{font-weight:650;font-size:14px;font-variant-numeric:tabular-nums}
 .ocrow .oc2{font-size:11px;color:var(--ink-2)}
-.ocrow button{padding:6px 12px;font-size:12px;border-radius:16px;border:1px solid var(--blue);
+.ocrow button{padding:8px 12px;min-height:40px;font-size:12px;border-radius:16px;border:1px solid var(--blue);
   background:#fff;color:var(--blue);font-weight:650}
 .ocrow .del{border-color:var(--line-hard);color:var(--ink-2)}
 .matkind{display:flex;justify-content:space-between;align-items:baseline;margin:10px 0 4px;
@@ -210,7 +216,7 @@ input[inputmode]{font-variant-numeric:tabular-nums}
 .projrow:last-child{border-bottom:none}
 .projrow .pn{font-weight:650;font-size:14px}
 .projrow .pd{font-size:11px;color:var(--ink-2)}
-.projrow button{padding:6px 12px;font-size:12px;border-radius:16px;border:1px solid var(--blue);
+.projrow button{padding:8px 12px;min-height:40px;font-size:12px;border-radius:16px;border:1px solid var(--blue);
   background:#fff;color:var(--blue);font-weight:650}
 .projrow .del{border-color:var(--line-hard);color:var(--ink-2)}
 .incblock{margin-bottom:10px}
@@ -218,7 +224,7 @@ input[inputmode]{font-variant-numeric:tabular-nums}
 .incrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;padding-left:4px}
 .chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;
   border:1px solid var(--line-hard);border-radius:20px;padding:6px 12px;background:#fff;
-  color:var(--ink-2);cursor:pointer;user-select:none}
+  color:var(--ink-2);cursor:pointer;user-select:none;min-height:40px}
 .chk.on{background:var(--sky);border-color:var(--blue);color:var(--blue-deep)}
 .chk input{display:none}
 .chk .box{width:14px;height:14px;border:1.5px solid var(--line-hard);border-radius:4px;flex:none;position:relative}
@@ -262,7 +268,7 @@ button{font:inherit;font-weight:650;border-radius:8px;border:1px solid transpare
 .btn-primary:active{background:var(--blue-deep)}
 .btn-primary:disabled{opacity:.6}
 .btn-ghost{background:#fff;color:var(--ink);border-color:var(--line-hard)}
-.btn-sm{padding:8px 11px;font-size:13px}
+.btn-sm{padding:8px 11px;font-size:13px;min-height:40px}
 #results{display:none}
 #results.on{display:block}
 .tabs{display:flex;gap:5px;margin-bottom:12px;overflow-x:auto}
@@ -300,7 +306,7 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .cutlisthead{font-size:13px;margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
 .searchbar{border:1px solid var(--line-hard);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:#fff}
 .searchbar .stext{font-size:13px;line-height:1.45}
-.searchcompare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.searchcompare{display:grid;grid-template-columns:1fr;gap:8px;margin-top:9px}
 .searchcompare>div{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;line-height:1.5}
 .searchcompare b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2)}
 .fatalwarn{background:#8b1e22;color:#fff;border-radius:10px;padding:13px 14px;margin-bottom:12px;line-height:1.45}
@@ -369,16 +375,16 @@ details.cfg[open] .cfgbody{margin-top:12px}
 .dwg svg{display:block;margin:2px 0 6px}
 .trainrow{display:inline-flex;gap:5px;margin-top:3px}
 .trainbtn,.untrainbtn{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
-  padding:3px 8px;border-radius:10px;border:1px solid var(--blue);background:#fff;color:var(--blue)}
+  padding:6px 8px;min-height:36px;border-radius:10px;border:1px solid var(--blue);background:#fff;color:var(--blue)}
 .untrainbtn{border-color:var(--line-hard);color:var(--ink-2);font-weight:600;text-transform:none;letter-spacing:0}
 .tin{width:72px;padding:6px 4px;text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums;
   border:1px solid var(--line);border-radius:6px;background:#fff}
 .tin.over{color:var(--red);font-weight:700;border-color:#e0b0b0}
 .tin::placeholder{color:#b6bec6;font-style:normal}
 .tstep{padding:6px 9px;font-size:13px;font-weight:700;border-radius:14px;
-  border:1px solid var(--line-hard);background:#fff;color:var(--ink-2);margin:0 3px}
+  min-height:36px;border:1px solid var(--line-hard);background:#fff;color:var(--ink-2);margin:0 3px}
 .tbtn{padding:6px 12px;font-size:12px;font-weight:700;border-radius:16px;
-  border:1px solid var(--blue);background:#fff;color:var(--blue)}
+  min-height:36px;border:1px solid var(--blue);background:#fff;color:var(--blue)}
 .tbtn.on{background:var(--red);border-color:var(--red);color:#fff}
 #printPack{display:none}
 .estsec{margin-top:16px}
@@ -451,7 +457,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.35</span><span class="sub">Bluebird Woodworking</span><div class="header-project" id="headerProject"></div></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.36</span><span class="sub">Bluebird Woodworking</span><div class="header-project" id="headerProject"></div></header>
 <div class="wrap">
 
 <div id="home">
@@ -528,10 +534,8 @@ body.printing .wrap{padding-bottom:120px}
 <div id="builder">
   <div class="card" id="projBar">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-      <div style="min-width:0">
-        <div style="font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--ink-2);font-weight:600">Project</div>
-        <div id="projName" style="font-size:17px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
-      </div>
+      <div style="font-size:11px;color:var(--ink-2);font-weight:600">Project tools</div>
+      <div id="projName" hidden></div>
       <div style="display:flex;gap:6px;flex:none">
         <button class="btn-ghost btn-sm" id="projRename">Rename</button>
         <button class="btn-ghost btn-sm" id="projSaveBtn">Save</button>
@@ -562,7 +566,7 @@ body.printing .wrap{padding-bottom:120px}
     <div style="margin-bottom:10px"><label>Optimize cut maps for</label><select id="opt_mode">
       <option value="balanced">Balanced</option>
       <option value="fast">Fewest cuts &amp; fence changes</option>
-      <option value="scrap">Least scrap</option>
+      <option value="scrap">Least scrap (incl. kerf)</option>
       <option value="offcuts">Fewest, largest reusable offcuts</option>
     </select><div class="fieldnote">Sheet count is always minimized first. The preference chooses between layouts using that minimum.</div></div>
     <div class="deflabel" style="margin:2px 0 6px">Offcut rack, per cut map</div>
@@ -1242,7 +1246,7 @@ const CUTOPT=(()=>{
 
   /* ---------------------------------------------------------------- sheets */
 
-  function candidateFirstCuts(parts) {
+  function candidateFirstCuts(parts, expanded = false) {
     const dims = [...new Set(parts.flatMap(p => [p.w, p.h]).map(v => Math.round(v * 32) / 32))];
     const values = new Set([36, 40, 42, 48, 54, 60, 59.875]);
     const add = value => {
@@ -1263,9 +1267,28 @@ const CUTOPT=(()=>{
       }
     });
     stacks.forEach(a => stacks.forEach(b => add(a + KERF + b)));
+    if(!expanded) return [...values]
+      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS && SHEET_L - v - KERF > EPS)
+      .sort((a,b)=>a-b);
+    /* Reachable 1/32" stacks catch mixed rows that the old one- and two-size
+       guesses missed. The bounded set stays tiny (at most 1,921 entries), but
+       gives the first-cut search every useful combination of part dimensions. */
+    const maxU=Math.round(FIRST_MAX*32), kerfU=Math.round(KERF*32);
+    const dimU=[...new Set(dims.map(d=>Math.round(d*32)).filter(d=>d>0&&d<=maxU))];
+    let reach=new Set([0]);
+    for(let step=0;step<16;step++){
+      const next=new Set(reach);
+      for(const cur of reach) for(const d of dimU){
+        const v=cur?cur+kerfU+d:d;
+        if(v<=maxU) next.add(v);
+      }
+      if(next.size===reach.size) break;
+      reach=next;
+    }
+    reach.forEach(v=>add(v/32));
     return [...values]
       .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS && SHEET_L - v - KERF > EPS)
-      .sort((a, b) => a - b);
+      .sort((a,b)=>a-b);
   }
 
   /* [index] The first `openCount` sheets carry parts longer than any half sheet. They
@@ -1931,7 +1954,9 @@ const CUTOPT=(()=>{
   function addToPool(pool, candidate) {
     if (!candidate) return pool;
     const signature = candidate.sheets.map(s => formatInches(s.firstCut)).join('|') + ':' + candidate.cutCount + ':' +
-      candidate.fenceChanges + ':' + candidate.wasteArea.toFixed(1) + ':' + candidate.unmatchedParts + ':' + candidate.typeSpread + ':' + candidate.repeatedSheets;
+      candidate.fenceChanges + ':' + candidate.wasteArea.toFixed(1) + ':' + candidate.unmatchedParts + ':' + candidate.typeSpread + ':' +
+      candidate.repeatedSheets + ':' + candidate.offcutCount + ':' + candidate.largestOffcut.toFixed(1) + ':' +
+      candidate.longestOffcutSide.toFixed(2) + ':' + candidate.batchCount;
     if (pool.some(p => p.signature === signature)) return pool;
     candidate.signature = signature;
     if (pool.some(p => dominates(p, candidate))) return pool;
@@ -1975,13 +2000,13 @@ const CUTOPT=(()=>{
         : OPT_MODE==='offcuts'
           ? [...minPool].sort((a,b)=>a.offcutCount-b.offcutCount||b.largestOffcut-a.largestOffcut||b.longestOffcutSide-a.longestOffcutSide||a.wasteArea-b.wasteArea)[0]
           : balanced;
-    const prefLabel=OPT_MODE==='fast'?'Fastest cutting':OPT_MODE==='scrap'?'Least scrap':OPT_MODE==='offcuts'?'Best offcuts':(preferred.unmatchedParts===0?'Balanced · fully batched':'Balanced');
+    const prefLabel=OPT_MODE==='fast'?'Fastest cutting':OPT_MODE==='scrap'?'Least scrap incl. kerf':OPT_MODE==='offcuts'?'Best offcuts':(preferred.unmatchedParts===0?'Balanced · fully batched':'Balanced');
     push(prefLabel, preferred, 'Minimum-sheet layout using the selected preference');
     push('Grouped by part', [...minPool].sort((a, b) =>
       a.typeSpread - b.typeSpread || a.unmatchedParts - b.unmatchedParts || a.cutCount - b.cutCount)[0], 'Each part type kept on as few sheets as possible');
     push('Repeat sheets', [...minPool].sort((a, b) =>
       b.repeatedSheets - a.repeatedSheets || a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Identical sheets cut from one setup');
-    push('Least scrap', [...minPool].sort((a, b) => a.wasteArea - b.wasteArea || a.timeSeconds - b.timeSeconds)[0], 'Lowest unusable waste');
+    push('Least scrap incl. kerf', [...minPool].sort((a, b) => a.wasteArea - b.wasteArea || a.timeSeconds - b.timeSeconds)[0], 'Lowest unusable waste including saw kerfs');
     push('Fewest cuts', [...minPool].sort((a, b) => a.cutCount - b.cutCount || a.fenceChanges - b.fenceChanges)[0], 'Shortest cut count');
     push('Fewest changes', [...minPool].sort((a, b) => a.fenceChanges - b.fenceChanges || a.cutCount - b.cutCount)[0], 'Most repeated settings');
     push('Biggest batches', [...minPool].sort((a, b) =>
@@ -2151,6 +2176,7 @@ const CUTOPT=(()=>{
     const area = v2parts.reduce((sum, p) => sum + p.area, 0);
     const minimum = Math.max(1, openCount, Math.ceil(area / (SHEET_W * SHEET_L)));
     const firstOptions = candidateFirstCuts(v2parts);
+    const broadFirstOptions = candidateFirstCuts(v2parts,true);
     const rng = makeRng(seed);   // [index] seed is 13579 unless Keep searching asks for another
     let pool = [];
     let sheetCount = minimum;
@@ -2171,10 +2197,45 @@ const CUTOPT=(()=>{
       }
       if (pool.length) break;
     }
-    const pick = pool.length ? uniqueCandidates(pool).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
+    let pick = pool.length ? uniqueCandidates(pool).find(c => validateCandidate(c.candidate, v2parts).ok) : null;
     if (!pick) throw new Error('no valid sheet layout found');
-
-    const c = regroupSheets(pick.candidate, v2parts);
+    let c = regroupSheets(pick.candidate, v2parts);
+    /* Broader mixed-dimension first cuts compete only if they do not regress either
+       shop-time count. This keeps established layouts stable while still admitting
+       a newly reachable breakdown that is genuinely better. */
+    let broadPool=[];
+    const broadTrials=Math.max(250,Math.ceil(trials*.15));
+    for(let trial=0;trial<broadTrials;trial++)
+      broadPool=addToPool(broadPool,buildTrial(v2parts,sheetCount,broadFirstOptions,rng,trial+trials,12,45,2,openCount,false));
+    const broadPick=broadPool.length?uniqueCandidates(broadPool).find(x=>validateCandidate(x.candidate,v2parts).ok):null;
+    if(broadPick){
+      const broad=regroupSheets(broadPick.candidate,v2parts,100);
+      if(broad.cutCount<=c.cutCount&&broad.fenceChanges<=c.fenceChanges&&
+         (broad.cutCount<c.cutCount||broad.fenceChanges<c.fenceChanges||broad.wasteArea<c.wasteArea-EPS)){
+        c=broad; pick=broadPick;
+      }
+    }
+    /* A single extra sheet is allowed only when it produces a genuinely large
+       shop-time saving. Three minutes and 20% prevents a casual cut reduction
+       from spending another sheet. Minimum-sheet layouts remain the default. */
+    if(sheetCount<v2parts.length){
+      let extraPool=[];
+      const extraCount=sheetCount+1, extraTrials=Math.max(350,Math.ceil(trials*.25));
+      for(const loose of [false,true]){
+        for(let trial=0;trial<extraTrials;trial++)
+          extraPool=addToPool(extraPool,buildTrial(v2parts,extraCount,broadFirstOptions,rng,trial+trials,12,45,2,openCount,loose));
+        if(extraPool.length) break;
+      }
+      const extraPick=extraPool.length?uniqueCandidates(extraPool).find(x=>validateCandidate(x.candidate,v2parts).ok):null;
+      if(extraPick){
+        const extra=regroupSheets(extraPick.candidate,v2parts,120);
+        const saved=c.timeSeconds-extra.timeSeconds;
+        if(saved>=180&&saved>=c.timeSeconds*.20){
+          c=extra;
+          pick={...extraPick,label:extraPick.label+' · faster with one extra sheet'};
+        }
+      }
+    }
     const idOf = new Map(v2parts.map(p => [p.typeIndex + ':' + p.instance, p.id]));
     const sheets = c.sheets.map(sheet => {
       const out = sheet.placements.map(p => ({
@@ -2194,10 +2255,10 @@ const CUTOPT=(()=>{
          then the engine's own balanced score (lower is better). */
       score: {sheets: c.sheets.length, raw: objectiveRaw(c), cuts:c.cutCount,
         fenceChanges:c.fenceChanges, scrapArea:r4(c.wasteArea), offcutCount:c.offcutCount,
-        largestOffcut:r4(c.largestOffcut)},
+        largestOffcut:r4(c.largestOffcut),timeSeconds:c.timeSeconds},
       openSheets: c.sheets.filter(s => s.placements.some(p => Math.max(p.w, p.h) > halfMax() + EPS)).length,
       metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges, scrapArea:r4(c.wasteArea),
-        offcutCount:c.offcutCount, largestOffcut:r4(c.largestOffcut)}
+        offcutCount:c.offcutCount, largestOffcut:r4(c.largestOffcut),timeSeconds:c.timeSeconds}
     };
   }
 
@@ -2214,7 +2275,7 @@ const CUTOPT=(()=>{
    layout in hand. No worker (blocked, or an old browser) means the search runs in the
    page exactly as it always did. */
 const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
-const NEST_CACHE_VERSION='1.33';
+const NEST_CACHE_VERSION='1.36';
 const NEST_MEMO=new Map();                 // this session: signature -> engine result
 let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
 let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
@@ -2258,6 +2319,43 @@ function validNestResult(res,req){
   }
   return seen.size===need.size&&[res.score.sheets,res.score.raw,res.metrics.cuts,res.metrics.fenceChanges].every(Number.isFinite);
 }
+/* On-demand optimizer regression suite. Add ?selftest=1 to the file URL, or run
+   runOptimizerRegressionTests() in the console. These are the two established
+   production jobs that must remain complete and within their proven sheet counts. */
+window.runOptimizerRegressionTests=function(trials=3000){
+  const jobs=[
+    {name:'Repeated cabinet set',sheets:4,defs:[
+      ['Side Panel',36,18,10],['Top & Bottom',21.375,18,10],['Stretchers',21.375,3,10],['Adjustable Shelf',20.75,16.75,10]
+    ]},
+    {name:'Cabinets and toe kick',sheets:3,defs:[
+      ['Side Panel L1/L2/L4',34.5,24,6],['Bottom L1/L2/L4',24,23.0625,3],['Stretcher L1/L2/L4',23.0625,4,9],
+      ['Side Panel L3',30.5,24,2],['Bottom L3',27.0625,24,1],['Stretcher L3',27.0625,4,3],
+      ['TK Rail 48',48,4,2],['TK End',18+27/32,4,4],['TK Rung',18+27/32,3+9/32,3],
+      ['TK Runner 46',46+9/16,3,2],['TK Face 48',48,4,1],['TK Rail 52',52,4,2],
+      ['TK Runner 50',50+9/16,3,2],['TK Face 52',52,4,1]
+    ]}
+  ];
+  const prior={kerf:KERF,w:SHEET_W,l:SHEET_L,mode:OPT_MODE};
+  try{
+    KERF=.125; SHEET_W=48; SHEET_L=96; OPT_MODE='balanced';
+    return jobs.map(job=>{
+      let id=0, parts=[];
+      for(const [name,L,S,qty] of job.defs) for(let i=0;i<qty;i++) parts.push({id:id++,name,L,S});
+      try{
+        const res=CUTOPT.nest(parts,trials);
+        const valid=validNestResult(res,{parts,W:48,L:96});
+        return {job:job.name,pass:valid&&res.sheets.length===job.sheets,sheets:res.sheets.length,
+          expectedSheets:job.sheets,cuts:res.metrics.cuts,fenceChanges:res.metrics.fenceChanges,
+          detail:valid?'':'invalid or incomplete geometry'};
+      }catch(e){ return {job:job.name,pass:false,error:String(e&&e.message||e)}; }
+    });
+  }finally{ KERF=prior.kerf; SHEET_W=prior.w; SHEET_L=prior.l; OPT_MODE=prior.mode; }
+};
+if(new URLSearchParams(location.search).get('selftest')==='1') window.addEventListener('load',()=>{
+  const report=window.runOptimizerRegressionTests();
+  console.table(report);
+  toast(report.every(x=>x.pass)?'Optimizer regression tests passed.':'Optimizer regression test failed — do not cut.');
+});
 function nestRemember(sig,res){
   NEST_MEMO.delete(sig); NEST_MEMO.set(sig,res);
   while(NEST_MEMO.size>40) NEST_MEMO.delete(NEST_MEMO.keys().next().value);
@@ -2319,18 +2417,50 @@ const NESTER={
     });
   }
 };
-let BUILD_SEQ=0, BUILD_PENDING=false;
+let BUILD_SEQ=0;
 
-/* Keep searching is scoped to one material request. Fresh seeds explore alternatives;
-   a candidate is offered only when it uses fewer sheets, or the same sheets without
-   increasing cuts or fence changes. The user chooses before it replaces the map. */
+/* Keep searching is scoped to one material request. Fresh seeds retain a small
+   Pareto set so the user can choose between time, scrap and useful remnants. */
 const SEARCH_ROUNDS=20;
 const SEARCH={on:false,token:0,round:0,sig:'',material:'',kind:'sheet',msg:'',offer:null};
-/* Never call a same-sheet result "better" if it increases either shop-time measure.
-   The user chooses before any qualifying candidate replaces the current map. */
-const nestBetter=(a,b)=>!!a&&!!b&&(a.sheets<b.sheets||(a.sheets===b.sheets&&
-  a.cuts<=b.cuts&&a.fenceChanges<=b.fenceChanges&&
-  (a.cuts<b.cuts||a.fenceChanges<b.fenceChanges||a.raw<b.raw-1e-6)));
+function scoreDominates(kind,a,b){
+  if(!a||!b) return false;
+  const am=a.unplaced||0,bm=b.unplaced||0;
+  if(am>bm) return false;
+  if(am<bm) return true;
+  const stock=kind==='board'?'boards':'sheets';
+  if(a[stock]>b[stock]) return false;
+  if(a[stock]<b[stock]) return true;
+  const vals=kind==='board'
+    ? [[a.timeSeconds,b.timeSeconds],[a.scrapArea,b.scrapArea],[-a.keepArea,-b.keepArea],[a.cuts,b.cuts],[a.fenceChanges,b.fenceChanges]]
+    : [[a.timeSeconds,b.timeSeconds],[a.scrapArea,b.scrapArea],[a.cuts,b.cuts],[a.fenceChanges,b.fenceChanges],[a.offcutCount,b.offcutCount],[-a.largestOffcut,-b.largestOffcut]];
+  return vals.every(([x,y])=>x<=y+EPS)&&vals.some(([x,y])=>x<y-EPS);
+}
+function usefulAlternative(kind,a,b){
+  if(!a||!b||(a.unplaced||0)>(b.unplaced||0)) return false;
+  const stock=kind==='board'?'boards':'sheets';
+  if(a[stock]<b[stock]) return true;
+  if(a[stock]>b[stock]){
+    return kind==='sheet'&&a[stock]===b[stock]+1&&b.timeSeconds-a.timeSeconds>=180&&
+      b.timeSeconds-a.timeSeconds>=b.timeSeconds*.20;
+  }
+  if(scoreDominates(kind,b,a)) return false;
+  return b.timeSeconds-a.timeSeconds>=60||b.scrapArea-a.scrapArea>=144||
+    (kind==='board'?(a.keepArea-b.keepArea>=144):(a.largestOffcut-b.largestOffcut>=144))||
+    a.cuts<b.cuts||a.fenceChanges<b.fenceChanges;
+}
+function addSearchAlternative(list,kind,current,entry){
+  const a=entry.after.score;
+  if(!usefulAlternative(kind,a,current.score)) return list;
+  if(list.some(x=>JSON.stringify(x.after.score)===JSON.stringify(a)||scoreDominates(kind,x.after.score,a))) return list;
+  list=list.filter(x=>!scoreDominates(kind,a,x.after.score));
+  list.push(entry);
+  list.sort((x,y)=>{
+    const a=x.after.score,b=y.after.score, stock=kind==='board'?'boards':'sheets';
+    return a[stock]-b[stock]||a.timeSeconds-b.timeSeconds||a.scrapArea-b.scrapArea;
+  });
+  return list.slice(0,3);
+}
 function stopSearch(){
   if(!SEARCH.on) return;
   SEARCH.on=false; SEARCH.token++;
@@ -2345,13 +2475,17 @@ function searchBarInner(sig,material,kind){
   const active=SEARCH.sig===sig&&SEARCH.kind===kind;
   const kept=kind==='board'?Object.prototype.hasOwnProperty.call(JOB_BOARD_SEEDS,sig):!!JOB_NEST_BEST[sig];
   if(active&&SEARCH.offer){
-    const a=SEARCH.offer.before.score,b=SEARCH.offer.after.score;
+    const a=SEARCH.offer.before.score;
     const line=x=>kind==='board'
-      ? x.boards+' boards · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap · '+(x.keepArea/144).toFixed(1)+' sq ft reusable'+(x.unplaced?' · '+x.unplaced+' missing':'')
-      : x.sheets+' sheets · '+x.cuts+' cuts · '+x.fenceChanges+' fence changes · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap';
-    return '<div class="stext"><b>A different '+esc(material)+' layout was found.</b> Compare it before changing this material.</div>'+ 
-      '<div class="searchcompare"><div><b>Current</b>'+line(a)+'</div><div><b>Candidate</b>'+line(b)+'</div></div>'+ 
-      '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="accept">Use candidate</button>'+ 
+      ? x.boards+' boards · '+x.cuts+' cuts · '+x.fenceChanges+' changes · '+Math.round(x.timeSeconds/60)+' min · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap incl. kerf · '+(x.keepArea/144).toFixed(1)+' sq ft reusable'+(x.unplaced?' · '+x.unplaced+' missing':'')
+      : x.sheets+' sheets · '+x.cuts+' cuts · '+x.fenceChanges+' changes · '+Math.round(x.timeSeconds/60)+' min · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap incl. kerf · largest offcut '+(x.largestOffcut/144).toFixed(1)+' sq ft';
+    let out='<div class="stext"><b>Useful '+esc(material)+' alternatives were found.</b> Pick the tradeoff that suits this job.</div>'+ 
+      '<div class="searchcompare"><div><b>Current</b>'+line(a)+'</div></div>';
+    SEARCH.offer.options.forEach((o,i)=>{
+      out+='<div class="searchcompare"><div><b>Option '+(i+1)+'</b>'+line(o.after.score)+'</div></div>'+ 
+        '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="accept" data-i="'+i+'">Use option '+(i+1)+'</button></div>';
+    });
+    return out+'<div class="qbtns">'+
       '<button type="button" class="btn-ghost btn-sm" data-s="reject">Keep current</button></div>';
   }
   if(SEARCH.on&&active)
@@ -2370,10 +2504,6 @@ function paintSearch(){
   for(const el of document.querySelectorAll('#resBody .searchbar'))
     el.innerHTML=searchBarInner(el.dataset.searchSig,el.dataset.searchMaterial,el.dataset.searchKind);
 }
-/* Resolves once the build in progress has finished (or failed). */
-function afterBuild(){
-  return new Promise(res=>{ const tick=()=>BUILD_PENDING?setTimeout(tick,60):res(); tick(); });
-}
 async function keepSearching(sig){
   if(SEARCH.on||!RESULT||!sig) return;
   const req=(LAST_NEST_REQS&&LAST_NEST_REQS.get(sig))||(LAST_BOARD_REQS&&LAST_BOARD_REQS.get(sig));
@@ -2383,6 +2513,7 @@ async function keepSearching(sig){
   Object.assign(SEARCH,{on:true,round:0,rounds:SEARCH_ROUNDS,sig,material:req.material||'this material',kind:req.kind,msg:'',offer:null});
   paintSearch();
   const live=()=>SEARCH.on&&token===SEARCH.token;
+  let alternatives=[];
   try{
     for(let round=1;round<=SEARCH_ROUNDS&&live();round++){
       SEARCH.round=round;
@@ -2393,26 +2524,24 @@ async function keepSearching(sig){
         const cloneStock=()=>req.stock.map(b=>({...b,used:false}));
         const cur=packBoards(req.parts,cloneStock(),JOB_BOARD_SEEDS[req.sig]||0);
         const candidate=packBoards(req.parts,cloneStock(),seed);
-        const a=candidate.score,b=cur.score;
-        const better=a.unplaced<b.unplaced||(a.unplaced===b.unplaced&&
-          (a.boards<b.boards||(a.boards===b.boards&&a.scrapArea<b.scrapArea-EPS)));
-        if(better){
-          SEARCH.offer={kind:'board',sig:req.sig,seed,before:cur,after:candidate};
-          SEARCH.on=false; paintSearch(); return;
-        }
+        alternatives=addSearchAlternative(alternatives,'board',cur,{seed,after:candidate});
         await new Promise(res=>setTimeout(res,0));
       }else{
         const cur=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
         if(!cur||cur.error||!cur.score) break;
         const d=await NESTER.run({...req,trials:req.trials*2},seed);
         if(!live()) break;
-        if(d.ok&&validNestResult(d.res,req)&&nestBetter(d.res.score,cur.score)){
-          SEARCH.offer={kind:'sheet',sig:req.sig,before:cur,after:d.res};
-          SEARCH.on=false; paintSearch(); return;
-        }
+        if(d.ok&&validNestResult(d.res,req))
+          alternatives=addSearchAlternative(alternatives,'sheet',cur,{after:d.res});
       }
     }
-    if(live()) SEARCH.msg='Searched '+SEARCH_ROUNDS+' rounds for '+SEARCH.material+' and the current layout held.';
+    if(live()){
+      const before=req.kind==='board'
+        ? packBoards(req.parts,req.stock.map(b=>({...b,used:false})),JOB_BOARD_SEEDS[req.sig]||0)
+        : JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+      if(alternatives.length) SEARCH.offer={kind:req.kind,sig:req.sig,before,options:alternatives};
+      else SEARCH.msg='Searched '+SEARCH_ROUNDS+' rounds for '+SEARCH.material+' and the current layout held.';
+    }
   }catch(e){
     if(e!==NEST_STOPPED){ SEARCH.msg='The search stopped: '+(e&&e.message||e)+'.'; }
   }finally{
@@ -2420,10 +2549,11 @@ async function keepSearching(sig){
   }
 }
 
-function acceptSearchOffer(){
+function acceptSearchOffer(index=0){
   const o=SEARCH.offer; if(!o) return;
-  if(o.kind==='board') JOB_BOARD_SEEDS[o.sig]=o.seed;
-  else JOB_NEST_BEST[o.sig]=o.after;
+  const pick=o.options&&o.options[index]; if(!pick) return;
+  if(o.kind==='board') JOB_BOARD_SEEDS[o.sig]=pick.seed;
+  else JOB_NEST_BEST[o.sig]=pick.after;
   SEARCH.offer=null; SEARCH.msg=SEARCH.material+' candidate applied.';
   build({quiet:true});
 }
@@ -2437,20 +2567,37 @@ function packMaterial(material,matParts,stockOffcuts){
   const oversize=matParts.filter(p=>orient(p.L,p.S,SHEET_W,SHEET_L,'yield')===null);
   let remaining=[...fittable];
   const newOffcuts=[]; const offcutPanels=[]; let used=0;
-  const avail=stockOffcuts.filter(o=>o.material===material&&!o.used).sort((a,b)=>b.l*b.w-a.l*a.w);
-  for(const o of avail){
-    if(!remaining.length) break;
-    const cols=columnsForBin(remaining,o.w,o.l,null);
-    let [pl,placedCols,,free]=guillotineColumns(cols,o.w,o.l);
-    const placed=placedCols.flatMap(([c])=>c.parts);
-    if(placed.length){
+  const avail=stockOffcuts.filter(o=>o.material===material&&!o.used);
+  const areaOf=list=>list.reduce((a,p)=>a+p.L*p.S,0);
+  const sheetLB=list=>Math.ceil(areaOf(list)/(SHEET_W*SHEET_L));
+  /* Test every rack piece before committing one. A poor-fitting large remnant is
+     preserved unless it saves a new sheet, finishes the material, or uses at least
+     65% of its area. This avoids greedily turning valuable offcuts into scraps. */
+  while(remaining.length){
+    const beforeLB=sheetLB(remaining), choices=[];
+    for(const o of avail){
+      if(o.used) continue;
+      const cols=columnsForBin(remaining,o.w,o.l,null);
+      const [pl,placedCols,,free]=guillotineColumns(cols,o.w,o.l);
+      const placed=placedCols.flatMap(([c])=>c.parts);
+      if(!placed.length) continue;
       const [plo,of]=offcutsFromFree(pl,free,material);
-      o.used=true; used++;
-      offcutPanels.push([plo,o.w,o.l]);
-      newOffcuts.push(...of);
-      const done=new Set(placed.map(p=>p.id));
-      remaining=remaining.filter(p=>!done.has(p.id));
+      const placedArea=placed.reduce((a,p)=>a+p.L*p.S,0);
+      const keepArea=of.reduce((a,p)=>a+p.l*p.w,0);
+      const waste=Math.max(0,o.l*o.w-placedArea-keepArea); // physical scrap + kerf
+      const done=new Set(placed.map(x=>x.id));
+      const after=remaining.filter(p=>!done.has(p.id));
+      const afterLB=sheetLB(after), utilization=placedArea/(o.l*o.w);
+      if(after.length&&afterLB>=beforeLB&&utilization<.65) continue;
+      choices.push({o,plo,of,placed,after,key:[afterLB,waste/Math.max(1,placedArea),-placed.length,-placedArea,o.l*o.w]});
     }
+    choices.sort((a,b)=>cmpArr(a.key,b.key));
+    const best=choices[0];
+    if(!best) break;
+    best.o.used=true; used++;
+    offcutPanels.push([best.plo,best.o.w,best.o.l]);
+    newOffcuts.push(...best.of);
+    remaining=best.after;
   }
   let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[],requestSig=null;
   if(remaining.length){
@@ -2507,12 +2654,12 @@ function packBoardSeg(remaining,bw,bl,material){
     const placed=placedCols.flatMap(([c])=>c.parts);
     if(!placed.length) continue;
     const [plo]=offcutsFromFree(pl.slice(),free,material,boardTier);
-    const scrap=plo.filter(o=>o.kind==='offcut'&&o.tier!=='inventory')
-                   .reduce((a,o)=>a+o.w*o.h,0);
     const partArea=placed.reduce((a,x)=>a+x.L*x.S,0);
-    /* least scrap first, then most parts placed, then most wood used */
-    const key=[Math.round(scrap*100)/100,-placed.length,-Math.round(partArea*100)/100];
-    if(!best||cmpArr(key,best.key)<0) best={key,pl:plo,placed,scrap};
+    const trimmed=trimSeg({pl:plo});
+    const waste=trimmed?Math.max(0,Math.min(bl,trimmed.usedLen+KERF)*bw-partArea-trimmed.keep):Infinity;
+    /* Scrap includes every kerf, just like sheet and final board reporting. */
+    const key=[Math.round(waste*100)/100,-placed.length,-Math.round(partArea*100)/100];
+    if(!best||cmpArr(key,best.key)<0) best={key,pl:plo,placed,waste};
   }
   return best;
 }
@@ -2550,7 +2697,23 @@ function boardRng(seed){
 }
 function boardResultScore(r){
   return {boards:r.boardsUsed,scrapArea:r.scrapArea,keepArea:r.keepArea,
-    unplaced:r.unplaced.length,raw:r.boardsUsed*1e6+r.unplaced.length*1e8+r.scrapArea};
+    cuts:r.cuts,fenceChanges:r.fenceChanges,timeSeconds:r.timeSeconds,
+    unplaced:r.unplaced.length,raw:r.boardsUsed*1e6+r.unplaced.length*1e8+r.scrapArea*50+r.timeSeconds};
+}
+
+function boardWorkMetrics(panels){
+  let cuts=0, changes=0, last=null;
+  for(const panel of panels){
+    const parts=panel.placements.filter(p=>p.kind==='part');
+    const rip=[...new Set(parts.map(p=>r4(p.x+p.w)).filter(x=>x<panel.w-EPS))].sort((a,b)=>a-b);
+    const cross=[...new Set(parts.map(p=>r4(p.y+p.h)).concat(panel.cuts||[]))].sort((a,b)=>a-b);
+    cuts+=rip.length+cross.length;
+    for(const setting of rip.map(x=>'R'+x).concat(cross.map(x=>'C'+x))){
+      if(last!==null&&setting!==last) changes++;
+      last=setting;
+    }
+  }
+  return {cuts,fenceChanges:changes,timeSeconds:cuts*12+changes*45};
 }
 
 function packBoards(parts,stock,seed=0){
@@ -2560,7 +2723,6 @@ function packBoards(parts,stock,seed=0){
     for(let i=0;i<p.qty;i++)
       flat.push({id:uid++,L:p.grainL??p.L,S:p.grainW??p.W,name:p.name,noRotate:true});
   const panels=[]; let remaining=flat;
-  let scrapArea=0, keepArea=0;
   /* Waste decides which board to reach for, not size. Every board still on the rack
      is packed speculatively each round and the one that throws away least per piece
      wins; the smaller board breaks a tie, so the rack still burns down. Reaching for
@@ -2581,8 +2743,13 @@ function packBoards(parts,stock,seed=0){
          crosscut — everything past it stays on the board. */
       const t=trimSeg(res);
       if(!t) continue;
-      const perPart=t.scrap/Math.max(1,res.placed.length);
-      const key=[Math.round(perPart*100)/100, e.b.l*e.b.w, -res.placed.length];
+      const partArea=res.placed.reduce((a,p)=>a+p.L*p.S,0);
+      const waste=Math.max(0,Math.min(avail,t.usedLen+KERF)*e.b.w-partArea-t.keep);
+      const perPart=waste/Math.max(1,res.placed.length);
+      const ripSettings=new Set(res.placed.map(p=>r4(p.x+p.w))).size;
+      const crossSettings=new Set(res.placed.map(p=>r4(p.y+p.h))).size;
+      const timeProxy=(ripSettings+crossSettings)*12+Math.max(0,ripSettings+crossSettings-1)*45;
+      const key=[Math.round(perPart*100)/100,timeProxy,e.b.l*e.b.w,-res.placed.length];
       choices.push({key,res,t,e});
     }
     choices.sort((a,b)=>cmpArr(a.key,b.key));
@@ -2591,8 +2758,6 @@ function packBoards(parts,stock,seed=0){
     const {res,t,e}=best;
     panels.push({placements:t.kept,w:e.b.w,l:t.usedLen,board:e.b,start:e.pos,
       label:e.b.material+' — '+fmt(e.b.l)+'" \u00d7 '+fmt(e.b.w)+'" board'});
-    scrapArea+=t.scrap;
-    keepArea+=t.keep;
     const done=new Set(res.placed.map(x=>x.id));
     remaining=remaining.filter(x=>!done.has(x.id));
     e.pos=r4(e.pos+t.usedLen+KERF);      // the next piece starts on the far side of the cut
@@ -2606,9 +2771,10 @@ function packBoards(parts,stock,seed=0){
   const inventoryArea=m.offcuts.reduce((a,o)=>a+o.l*o.w,0);
   const placedArea=m.panels.reduce((a,p)=>a+p.placements
     .filter(x=>x.kind==='part').reduce((s,x)=>s+x.w*x.h,0),0);
+  const work=boardWorkMetrics(m.panels);
   const result={panels:m.panels,boardsUsed:touched.size,unplaced:remaining,segMax:RIP_MAX,
           newOffcuts:m.offcuts,
-          scrapArea:r4(Math.max(0,sourceArea-inventoryArea-placedArea)),keepArea:r4(inventoryArea)};
+          scrapArea:r4(Math.max(0,sourceArea-inventoryArea-placedArea)),keepArea:r4(inventoryArea),...work};
   result.score=boardResultScore(result);
   return result;
 }
@@ -2623,7 +2789,7 @@ function mergeBoardPanels(panels){
     if(!byBoard.has(p.board)) byBoard.set(p.board,[]);
     byBoard.get(p.board).push(p);
   }
-  const out=[]; const offcuts=[]; let scrap=0, keep=0;
+  const out=[]; const offcuts=[];
   for(const [b,list] of byBoard){
     list.sort((x,y)=>x.start-y.start);
     const placements=[]; const cuts=[];
@@ -2643,14 +2809,13 @@ function mergeBoardPanels(panels){
       const h=r4(b.l-tailY), tier=boardTier(b.w,h);
       cuts.push(end);
       if(h>EPS) placements.push({kind:'offcut',x:0,y:tailY,w:b.w,h,tier});
-      if(tier==='inventory') keep+=b.w*h; else scrap+=b.w*h;
     }
     for(const p of placements) if(p.kind==='offcut'&&p.tier==='inventory')
       offcuts.push({material:b.material,l:r4(Math.max(p.w,p.h)),w:r4(Math.min(p.w,p.h))});
     out.push({placements,w:b.w,l:b.l,board:b,cuts,
               label:b.material+' — '+fmt(b.l)+'" \u00d7 '+fmt(b.w)+'" board'});
   }
-  return {panels:out,offcuts,scrap:r4(scrap),keep:r4(keep)};
+  return {panels:out,offcuts};
 }
 
 /* ================= fractions ================= */
@@ -2728,8 +2893,9 @@ function renderInclude(){
   oh.append(row);
 }
 function chip(label,on,cls){
-  const d=document.createElement('div');
+  const d=document.createElement('button'); d.type='button';
   d.className='chk'+(on?' on':'')+(cls?' '+cls:'');
+  d.setAttribute('aria-pressed',on?'true':'false');
   d.innerHTML='<span class="box"></span><span></span>';
   d.lastChild.textContent=label;
   return d;
@@ -3080,6 +3246,8 @@ function renderRunOpts(run){
   setBadge();
   box.classList.toggle('closed',!optOpen[run]);
   lab.onclick=()=>{ optOpen[run]=!optOpen[run]; box.classList.toggle('closed',!optOpen[run]); setBadge(); };
+  lab.setAttribute('role','button'); lab.tabIndex=0;
+  lab.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); lab.click(); } };
   host.append(box);
 }
 
@@ -3126,6 +3294,8 @@ function syncDefFold(run){
   badge.style.display=(!defOpen[run]&&n)?'':'none';
   badge.textContent=n+' set';
   lab.onclick=()=>{ defOpen[run]=!defOpen[run]; syncDefFold(run); };
+  lab.setAttribute('role','button'); lab.tabIndex=0;
+  lab.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); lab.click(); } };
 }
 
 const el=(tag,cls,html)=>{ const e=document.createElement(tag);
@@ -4491,7 +4661,6 @@ function build(opts){
   for(const pre of ['off_use_','off_log_']) for(const k of ['cab','drw','ff']){
     const el=document.getElementById(pre+k); offSnap[pre+k]=el?el.value==='yes':false; }
   const warnBase=warns.length, mySeq=++BUILD_SEQ;
-  BUILD_PENDING=true;
   const pass=()=>{
     if(mySeq!==BUILD_SEQ) return;                  // a newer build took over
     warns.length=warnBase;
@@ -4499,7 +4668,7 @@ function build(opts){
     try{ buildPass(); }
     catch(e){
       SHEET_L=96; SHEET_W=48;
-      if(e!==NEST_PENDING){ NEST_USED=null; BOARD_USED=null; BUILD_PENDING=false;
+      if(e!==NEST_PENDING){ NEST_USED=null; BOARD_USED=null;
         btn.disabled=false; btn.textContent=RESULT?'Rebuild':'Build cut list'; throw e; }
       const req=NESTER.want;
       NESTER.run(req).then(d=>{
@@ -4644,7 +4813,7 @@ function build(opts){
     btn.disabled=false; btn.textContent='Rebuild';
     renderPriceRows();
     /* Deeper-search layouts are kept only for the parts they were found for. */
-    LAST_NEST_REQS=NEST_USED; LAST_BOARD_REQS=BOARD_USED; NEST_USED=null; BOARD_USED=null; BUILD_PENDING=false;
+    LAST_NEST_REQS=NEST_USED; LAST_BOARD_REQS=BOARD_USED; NEST_USED=null; BOARD_USED=null;
     for(const k of Object.keys(JOB_NEST_BEST)) if(!LAST_NEST_REQS.has(k)) delete JOB_NEST_BEST[k];
     for(const k of Object.keys(JOB_BOARD_SEEDS)) if(!LAST_BOARD_REQS.has(k)) delete JOB_BOARD_SEEDS[k];
     fillAssump(); render(); if(!quiet) window.scrollTo(0,0);
@@ -4893,15 +5062,15 @@ function stickSVG(st,cfg){
     e+='<rect x="'+x.toFixed(1)+'" y="8" width="'+w.toFixed(1)+'" height="30" fill="'+colorFor(c.name)+'" stroke="#333" stroke-width="0.8"/>';
     if(c.rip>1/64)
       e+='<rect x="'+x.toFixed(1)+'" y="8" width="'+w.toFixed(1)+'" height="'+(30*c.rip/cfg.stock_width).toFixed(1)+
-         '" fill="#dcedc8" stroke="#8bb99a" stroke-width="0.6" stroke-dasharray="3 2"/>';
+         '" fill="#f7d6d6" stroke="#d99999" stroke-width="0.6" stroke-dasharray="3 2"/>';
     if(w>34) e+='<text x="'+(x+w/2).toFixed(1)+'" y="27" font-size="8.5" fill="#222" text-anchor="middle">'+fmt(c.len)+'</text>';
     x+=w+cfg.kerf*scale;
   });
   const left=cfg.stock_length-st.used;
   if(left>0.5){
     const w=left*scale;
-    e+='<rect x="'+x.toFixed(1)+'" y="8" width="'+Math.max(0,W+M-x).toFixed(1)+'" height="30" fill="#ececec" stroke="#b0b0b0" stroke-width="0.6" stroke-dasharray="4 3"/>';
-    if(w>40) e+='<text x="'+(x+(W+M-x)/2).toFixed(1)+'" y="27" font-size="8.5" fill="#777" text-anchor="middle">drop '+fmt(left)+'"</text>';
+    e+='<rect x="'+x.toFixed(1)+'" y="8" width="'+Math.max(0,W+M-x).toFixed(1)+'" height="30" fill="#f7d6d6" stroke="#d99999" stroke-width="0.6" stroke-dasharray="4 3"/>';
+    if(w>40) e+='<text x="'+(x+(W+M-x)/2).toFixed(1)+'" y="27" font-size="8.5" fill="#777" text-anchor="middle">scrap '+fmt(left)+'"</text>';
   }
   e+='<text x="'+M+'" y="50" font-size="9" fill="#555">'+st.cuts.length+' pieces, '+fmt(st.used)+'\u2033 used</text>';
   return e+'</svg>';
@@ -4913,29 +5082,29 @@ function viewMap(body,sum,g){
   sum.innerHTML=(g.sticks?'<div>Sticks of '+fmt(cfg.stock_length/12)+' ft<b>'+g.sticks.length+'</b></div>':'')+
     (g.boards&&g.boards.panels.length
       ?'<div>Boards used<b>'+g.boards.boardsUsed+'</b></div>'+
-       '<div>Board scrap<b>'+(g.boards.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
+       '<div>Scrap incl. kerf<b>'+(g.boards.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
        (g.boards.unplaced.length?'<div>Not placed<b>'+g.boards.unplaced.length+'</b></div>':'')
       :'');
   let h='';
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Pieces</th><th class="n">Offcuts used / reusable</th><th class="n">Saw passes / fence changes</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Pieces</th><th class="n">Net part area</th><th class="n">Offcuts used / reusable</th><th class="n">Scrap incl. kerf</th><th class="n">Saw passes / fence changes</th></tr></thead><tbody>';
     for(const m of N.materials){
       const mp=g.sheetParts.filter(p=>p.mat===m.material);
       const pieces=mp.reduce((a,p)=>a+p.qty,0);
       const area=mp.reduce((a,p)=>a+p.L*p.W*p.qty,0)/144;
-      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+pieces+'</td><td class="n">'+m.offcutsUsed+' / '+m.newOffcuts.length+
-        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td></tr>'+ 
-        '<tr><td colspan="5" style="padding-top:3px;color:var(--ink-2);font-size:12px">Sheet area <b style="color:var(--ink)">'+area.toFixed(1)+' sq ft</b> · Sheet scrap <b style="color:var(--ink)">'+
-        ((m.metrics?.scrapArea||0)/144).toFixed(1)+' sq ft</b></td></tr>';
+      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+pieces+'</td><td class="n">'+area.toFixed(1)+' sq ft</td><td class="n">'+m.offcutsUsed+' / '+m.newOffcuts.length+
+        '</td><td class="n">'+((m.metrics?.scrapArea||0)/144).toFixed(1)+' sq ft</td><td class="n">'+
+        (m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td></tr>';
     }
     h+='</tbody></table></div>';
     for(const m of N.materials){
       const sm=matOf(m.material), size=sm?fmt(sm.w)+'"×'+fmt(sm.l)+'"':'';
-      h+='<h3 style="font-size:14px;margin:14px 0 8px">'+esc(m.material)+' — '+m.sheets+' sheet(s) '+size+
-        (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</h3>';
+      h+='<details class="mapgroup" open><summary>'+esc(m.material)+' — '+m.sheets+' sheet(s) '+size+
+        (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</summary><div class="mapgroupbody">';
       for(const p of m.panels)
         h+='<div class="sheetwrap sheetpanel"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p)+'</div>';
       if(m.requestSig) h+=searchBar(m.requestSig,m.material);
+      h+='<div class="qbtns"><button type="button" class="btn-ghost btn-sm" data-top-summary>Back to material summary</button></div></div></details>';
     }
   }
   if(g.boards&&g.boards.panels.length){
@@ -4950,32 +5119,32 @@ function viewMap(body,sum,g){
       'work on that piece ends, not at '+fmt(B.segMax)+'", so nothing good is cut off behind it. A leftover under '+
       fmt(BOARD_MIN_W)+'" wide or under '+fmt(BOARD_MIN_L)+
       '" long counts as scrap; the layout is chosen to make as little of it as possible. '+
-      'The board that throws away least is used first, with the smaller board breaking a tie. Scrap on this job: '+
+      'The board that throws away least is used first, with cutting time and then the smaller board breaking a tie. Scrap including kerf on this job: '+
       (B.scrapArea/144).toFixed(1)+' sq ft, keepers '+(B.keepArea/144).toFixed(1)+' sq ft.</div>';
     /* Each lumber material gets its own maps and its own deeper-search control. */
     for(const bm of (B.materials||[])){
-      h+='<h3 style="font-size:14px;margin:16px 0 8px">'+esc(bm.material)+' — '+bm.boardsUsed+
-        ' board(s), '+(bm.scrapArea/144).toFixed(1)+' sq ft scrap</h3>';
+      h+='<details class="mapgroup" open><summary>'+esc(bm.material)+' — '+bm.boardsUsed+
+        ' board(s), '+(bm.scrapArea/144).toFixed(1)+' sq ft scrap incl. kerf</summary><div class="mapgroupbody">';
       bm.panels.forEach((p,i)=>{
         if(i%4===0) h+=(i?'</div>':'')+'<div class="boardrow">';
         h+='<div class="boardcell">'+sheetSVG(p,true)+'<h3>'+esc(p.label)+'</h3></div>';
       });
       if(bm.panels.length) h+='</div>';
       if(bm.requestSig) h+=searchBar(bm.requestSig,bm.material,'board');
+      h+='<div class="qbtns"><button type="button" class="btn-ghost btn-sm" data-top-summary>Back to material summary</button></div></div></details>';
     }
   }
   if(g.sticks&&g.sticks.length){
-    h+='<h3 style="font-size:13px;margin:18px 0 6px">'+esc(stickMat())+' — '+g.sticks.length+
-      ' stick(s) at '+fmt(cfg.stock_length)+'"</h3>'+
-      '<div class="legend"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>rip waste, cut off the side</span>'+
-      '<span><i style="background:#ececec;border-color:#b0b0b0"></i>drop</span></div>';
+    h+='<details class="mapgroup" open><summary>'+esc(stickMat())+' — '+g.sticks.length+
+      ' stick(s) at '+fmt(cfg.stock_length)+'"</summary><div class="mapgroupbody">'+ 
+      '<div class="legend"><span><i style="background:#f7d6d6;border-color:#d99999"></i>scrap (rip waste, drop &amp; kerf)</span></div>';
     /* Sticks are small, so they page up in groups of eight. */
     h+='<div class="stickgroup">';
     g.sticks.forEach((st,i)=>{
       if(i>0&&i%8===0) h+='</div><div class="stickgroup">';
       h+='<div class="sheetwrap stickwrap"><h3>Stick '+(i+1)+'</h3>'+stickSVG(st,cfg)+'</div>';
     });
-    h+='</div>';
+    h+='</div><div class="qbtns"><button type="button" class="btn-ghost btn-sm" data-top-summary>Back to material summary</button></div></div></details>';
   }
   body.innerHTML=h||'<div class="hint">Nothing to cut in this group.</div>';
 }
@@ -5628,11 +5797,8 @@ function dimV(y1,y2,x,label){
   return s+TX(x-6,(y1+y2)/2+3,label,8.5,'end',DMUT);
 }
 
-/* ---- run assembly: elevation and plan ----
-   opts.fronts adds the doors and drawer fronts over the boxes. Off by default, so
-   the Build tab and the printed shop drawings are exactly what they always were;
-   the prep-screen preview is the only caller that turns it on. */
-function drawRunAssembly(run,Rn,cfg,opts){
+/* ---- run assembly: elevation and plan ---- */
+function drawRunAssembly(run,Rn,cfg){
   const cabs=Rn.cabs, n=cabs.length;
   const span=cabs.reduce((a,c)=>a+c.w,0)+Rn.gaps.reduce((a,b)=>a+b,0);
   const sL=Rn.scribeL??Rn.scribe, sR=Rn.scribeR??Rn.scribe;
@@ -5662,53 +5828,6 @@ function drawRunAssembly(run,Rn,cfg,opts){
      them here obscured the box sides and made the two drawings look redundant. */
   g+=R(M,TOPM,sL*s,H,'rgba(0,0,0,.05)','#b9c2ca',THIN);
   g+=R(M+(sL+span)*s,TOPM,sR*s,H,'rgba(0,0,0,.05)','#b9c2ca',THIN);
-  /* Fronts sit on top of the frame, the way an overlay door actually does. Each one
-     is centred on its own box, so the picture tracks doors becoming drawers as the
-     interior is switched. */
-  if(opts&&opts.fronts){
-    const FFILL='rgba(255,255,255,.62)';
-    let fx=M+sL*s;
-    cabs.forEach((c,i)=>{
-      const w=c.w*s, ch=hOf(c)*s;
-      const y=TOPM+(c.align==='Bottom'?(H-ch):0);
-      let F=null; try{ F=frontParts(c,cfg); }catch(e){}
-      const rev=cfg.door_reveal*s;
-      const panel=(px,py,pw,ph,sw,rw)=>{
-        let o=R(px,py,pw,ph,FFILL,DINK,THIN);
-        if(pw>3*sw&&ph>3*rw) o+=R(px+sw,py+rw,pw-2*sw,ph-2*rw,'none',DMUT,THIN);
-        return o;
-      };
-      if(F&&F.kind==='doors'){
-        const dw=F.w*s, dh=F.h*s;
-        const tot=F.n*dw+(F.n-1)*rev;
-        let px=fx+w/2-tot/2;
-        const py=y+(ch-dh)/2;
-        for(let k=0;k<F.n;k++){
-          g+=panel(px,py,dw,dh,cfg.door_stile_width*s,cfg.door_rail_width*s);
-          px+=dw+rev;
-        }
-      }else if(F&&F.kind==='fronts'){
-        const dw=F.w*s;
-        const tot=F.heights.reduce((a,b)=>a+b,0)*s+(F.n-1)*rev;
-        const px=fx+w/2-dw/2;
-        let py=y+(ch-tot)/2;
-        for(const hh of F.heights){
-          g+=panel(px,py,dw,hh*s,cfg.front_stile_width*s,cfg.front_rail_width*s);
-          py+=hh*s+rev;
-        }
-      }
-      /* The tag was drawn with the box and is now under a door. Put it back on a chip
-         so it stays readable wherever a rail or a reveal happens to land. */
-      if(F&&F.kind){
-        const tw=Math.min(w-4,10+c.id.length*6.5);
-        if(tw>14&&ch>20){
-          g+=R(fx+w/2-tw/2,y+ch/2-7.5,tw,15,'#fff','#cfd6dd',THIN+' rx="3.5"');
-          g+=TX(fx+w/2,y+ch/2+3.5,c.id,9.5,'middle',DACC);
-        }
-      }
-      fx+=w+((i<n-1)?(Rn.gaps[i]||0)*s:0);
-    });
-  }
   g+=dimH(M,M+totalW*s,TOPM-12,fmt(totalW)+'" wall to wall');
   const by=TOPM+H+18;
   let dx=M+sL*s;
@@ -6155,6 +6274,9 @@ function uiMenu(title,items,msg){
 
 /* ================= project naming ================= */
 function currentProject(){ return localStorage.getItem('bbcab_current')||'Untitled'; }
+function localDateKey(d=new Date()){
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function setCurrentProject(n){ localStorage.setItem('bbcab_current',n); paintProjBar(); }
 function paintProjBar(){
   const el=document.getElementById('projName');
@@ -6221,8 +6343,8 @@ function parseDuration(s){
   s=String(s).trim().toLowerCase();
   if(!s) return 0;
   let m;
-  if((m=s.match(/^(\d+)\s*:\s*(\d{1,2})$/))) return (+m[1])*60+(+m[2]);
-  if((m=s.match(/^(\d+(?:\.\d+)?)\s*h\s*(\d{1,2})\s*m?$/))) return parseFloat(m[1])*60+(+m[2]);
+  if((m=s.match(/^(\d+)\s*:\s*(\d{1,2})$/))) return +m[2]<60?(+m[1])*60+(+m[2]):NaN;
+  if((m=s.match(/^(\d+(?:\.\d+)?)\s*h\s*(\d{1,2})\s*m?$/))) return +m[2]<60?parseFloat(m[1])*60+(+m[2]):NaN;
   let total=0, hit=false;
   if((m=s.match(/(\d+(?:\.\d+)?)\s*h/))){ total+=parseFloat(m[1])*60; hit=true; }
   if((m=s.match(/(\d+(?:\.\d+)?)\s*m/))){ total+=parseFloat(m[1]); hit=true; }
@@ -6537,7 +6659,7 @@ let printPick=null;
 async function printMenu(){
   if(!RESULT) return toast('Build the cut list first.');
   const blocked=!RESULT.complete;
-  const tabs=tabDefs().filter(t=>t.id!=='timer'&&(!blocked||!/^cut:/.test(t.id)));
+  const tabs=tabDefs().filter(t=>t.id!=='timer'&&(!blocked||(!/^cut:/.test(t.id)&&t.id!=='off')));
   const valid=new Set(tabs.map(t=>t.id));
   const pick=new Set((printPick||[]).filter(id=>valid.has(id)));
   if(!pick.size) for(const t of tabs) pick.add(t.id);
@@ -6547,7 +6669,9 @@ async function printMenu(){
       :'Tick what you want in the pack.');
     const row=document.createElement('div');
     row.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px';
-    const paint=()=>[...row.children].forEach(c=>c.classList.toggle('on',pick.has(c.dataset.id)));
+    const paint=()=>[...row.children].forEach(c=>{
+      const on=pick.has(c.dataset.id); c.classList.toggle('on',on); c.setAttribute('aria-pressed',on?'true':'false');
+    });
     for(const t of tabs){
       const c=chip(t.label,pick.has(t.id));
       c.dataset.id=t.id;
@@ -6581,7 +6705,7 @@ function printPack(only){
     '<div style="font-size:11px;color:#4a5560;margin-bottom:14px">Bluebird Woodworking · '+
     new Date().toLocaleDateString()+'</div>';
   const tmpBody=document.createElement('div'), tmpSum=document.createElement('div');
-  const want=only&&only.length?new Set(only):null;
+  const want=only&&only.length?new Set(only):null, failed=[];
   for(const t of tabDefs()){
     if(want&&!want.has(t.id)) continue;
     VIEW=t.id;
@@ -6599,11 +6723,12 @@ function printPack(only){
       else if(t.id==='dwgdrw') viewDrawers(tmpBody,tmpSum);
       else if(t.id.indexOf('dwg:')===0) viewBuild(tmpBody,tmpSum,t.id.slice(4));
       else viewCutGroup(tmpBody,tmpSum,RESULT.groups[+t.id.split(':')[1]]);
-    }catch(e){ continue; }
+    }catch(e){ failed.push(t.label); continue; }
     h+='<section class="pp"><h2>'+esc(t.label)+'</h2>'+ 
        '<div class="summary">'+tmpSum.innerHTML+'</div>'+tmpBody.innerHTML+'</section>';
   }
   VIEW=keep;
+  if(failed.length) h+='<section class="pp"><div class="warn">Could not render: '+esc(failed.join(', '))+'. The remaining sections are ready to print.</div></section>';
   if(!/<section/.test(h)) return toast('Nothing to print in the sections you picked.');
   host.innerHTML=h;
   document.body.classList.add('printing');
@@ -6612,6 +6737,7 @@ function printPack(only){
      ignores window.print() entirely, so there is always a way out and always a way
      to get the pack off the device. */
   PACK_HTML=h;
+  if(failed.length) toast('Some print sections could not be rendered: '+failed.join(', ')+'.');
   window.scrollTo(0,0);
   setTimeout(tryPrint,150);
 }
@@ -6844,7 +6970,10 @@ function renderHome(){
     const del=document.createElement('button'); del.className='del'; del.textContent='Delete';
     del.onclick=async()=>{
       if(!await uiConfirm('Delete "'+n+'"?','This cannot be undone.','Delete',true)) return;
-      const l=projList(); delete l[n]; localStorage.setItem(PKEY,JSON.stringify(l)); renderHome();
+      const wasCurrent=n===localStorage.getItem('bbcab_current');
+      const l=projList(); delete l[n]; localStorage.setItem(PKEY,JSON.stringify(l));
+      if(wasCurrent){ localStorage.removeItem('bbcab_current'); localStorage.removeItem('bbcab'); return hardReload(); }
+      renderHome();
     };
     const ren=document.createElement('button'); ren.textContent='Rename';
     ren.onclick=async()=>{
@@ -6865,6 +6994,8 @@ function renderHome(){
   document.getElementById('homeRack').innerHTML=rack.length
     ? '<div>Pieces<b>'+rack.length+'</b></div>'+Object.keys(byMat).map(k=>'<div>'+esc(k)+'<b>'+byMat[k]+'</b></div>').join('')
     : '<div class="hint" style="margin:0">Rack is empty.</div>';
+  const cont=document.getElementById('hContinue');
+  if(cont) cont.style.display=(cur&&localStorage.getItem('bbcab'))?'':'none';
 }
 function homeInit(){
   document.getElementById('hNew').onclick=async()=>{
@@ -6905,7 +7036,7 @@ function homeInit(){
   document.getElementById('ocAdd').onclick=async()=>{
     const res=await offcutForm('Add an offcut',null);
     if(!res||!res.qty) return;
-    const today=new Date().toISOString().slice(0,10);
+    const today=localDateKey();
     const rack=loadOffcuts();
     for(let i=0;i<res.qty;i++) rack.push({material:res.material,l:res.l,w:res.w,date:today});
     if(!saveOffcuts(rack)) return; renderOffcutLib();
@@ -6936,7 +7067,7 @@ function rackSig(list){
 }
 function saveOffcuts(list){
   try{ localStorage.setItem('bbcab_offcuts',JSON.stringify(
-    list.map(o=>({material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||new Date().toISOString().slice(0,10)})))); return true; }
+    list.map(o=>({material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||localDateKey()})))); return true; }
   catch(e){ toast('Storage is full — export a backup first.'); return false; }
 }
 function bankOffcuts(){
@@ -6946,7 +7077,7 @@ function bankOffcuts(){
     return toast('The offcut rack changed after this cut list was built. Rebuild before banking.');
   if(!RESULT.logOff) return toast("Offcut logging is off for this job — switch it on in Job settings first.");
   const R=RESULT.rack;
-  const today=new Date().toISOString().slice(0,10);
+  const today=localDateKey();
   const next=[...R.unusedStock.map(o=>({material:o.material,l:o.l,w:o.w,date:o.date||today})),
               ...R.banked.map(o=>({material:o.material,l:o.l,w:o.w,date:today}))];
   if(!saveOffcuts(next)) return;
@@ -7119,7 +7250,7 @@ function renameMaterial(from,to){
 
   const writes=[[MATKEY,JSON.stringify(mats)],[MRENAME,JSON.stringify(renamed)]];
   if(touched) writes.push(['bbcab_offcuts',JSON.stringify(rack.map(o=>({
-    material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||new Date().toISOString().slice(0,10)})))]);
+    material:o.material,l:r4(o.l),w:r4(o.w),date:o.date||localDateKey()})))]);
   if(projectsHit) writes.push([PKEY,JSON.stringify(projects)]);
   if(masterHit) writes.push([MKEY,JSON.stringify(m)]);
   if(openHit) writes.push(['bbcab',JSON.stringify(open)]);
@@ -7210,9 +7341,11 @@ function offcutForm(title,g){
     const iQ=mk('Qty',g?g.n:'1');
     box.append(grid);
     const note=document.createElement('div'); note.className='hint'; box.append(note);
-    const sync=()=>{ note.textContent=matKind(sel.value)!=='sheet'
-      ? 'Boards are logged for reference only — the stick cut map always starts from fresh stock.'
-      : 'Sheet offcuts get used before fresh sheets on the next job.'; };
+    const sync=()=>{ const kind=matKind(sel.value); note.textContent=kind==='sheet'
+      ? 'Sheet offcuts get used before fresh sheets on the next job.'
+      : kind==='lumber'
+        ? 'Lumber on the rack is used by board maps before more stock is needed.'
+        : 'Stick offcuts are logged for reference; stick maps start from fresh stock.'; };
     sel.onchange=sync; sync();
     sheetBtns(box,close,[{label:'Cancel',v:null},{label:'Save',kind:'go',act:c=>{
       const L=parseFrac(iL.value), W=parseFrac(iW.value);
@@ -7310,7 +7443,7 @@ function renderOffcutLib(){
     edit.onclick=async()=>{
       const res=await offcutForm('Edit offcut',g);
       if(!res) return;
-      const today=new Date().toISOString().slice(0,10);
+      const today=localDateKey();
       const rest=loadOffcuts().filter(o=>ocKey(o)!==g.key);
       for(let i=0;i<res.qty;i++)
         rest.push({material:res.material,l:res.l,w:res.w,date:g.date||today});
@@ -7428,6 +7561,8 @@ document.getElementById('resWarn').addEventListener('click',e=>{
 document.getElementById('resBody').addEventListener('click',e=>{
   const q=e.target.closest('[data-q]');
   if(q) return quoteAction(q.dataset.q);
+  const top=e.target.closest('[data-top-summary]');
+  if(top){ document.getElementById('resSummary').scrollIntoView({behavior:'smooth',block:'start'}); return; }
   const sb=e.target.closest('[data-s]');
   if(!sb) return;
   const bar=sb.closest('.searchbar');
@@ -7440,7 +7575,7 @@ document.getElementById('resBody').addEventListener('click',e=>{
     SEARCH.sig=sig; SEARCH.kind=kind; SEARCH.material=(bar&&bar.dataset.searchMaterial)||SEARCH.material; SEARCH.msg='Standard layout restored.';
     build({quiet:true});
   }
-  else if(sb.dataset.s==='accept') acceptSearchOffer();
+  else if(sb.dataset.s==='accept') acceptSearchOffer(+(sb.dataset.i||0));
   else if(sb.dataset.s==='reject') rejectSearchOffer();
 });
 document.getElementById('btnBack').onclick=()=>{
@@ -7505,7 +7640,7 @@ document.getElementById('btnMenu').onclick=async()=>{
    sometimes refuse that and gives no way to find out, so the day is only marked done
    once the prompt has actually been answered. Never assume the file landed. */
 const BK_LAST='bbcab_bk_last', BK_TRY='bbcab_bk_try', BK_OFF='bbcab_bk_off';
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>localDateKey();
 function backupName(){ return 'bluebird-cabinets-'+today()+'.json'; }
 function hasAnythingToBackUp(){
   try{
