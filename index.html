@@ -451,7 +451,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.34</span><span class="sub">Bluebird Woodworking</span><div class="header-project" id="headerProject"></div></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.35</span><span class="sub">Bluebird Woodworking</span><div class="header-project" id="headerProject"></div></header>
 <div class="wrap">
 
 <div id="home">
@@ -5607,6 +5607,17 @@ function dimH(x1,x2,y,label){
   let s=LN(x1,y-4,x1,y+4,DMUT,THIN)+LN(x2,y-4,x2,y+4,DMUT,THIN)+LN(x1,y,x2,y,DMUT,THIN);
   return s+TX((x1+x2)/2,y-6,label,8.5,'middle',DMUT);
 }
+/* One dimension row for the full cabinet run and the wall clearance at each end.
+   The offset labels sit outside their tiny measured segments so even a 1/2" scribe
+   remains readable on a phone. */
+function dimRunWidth(x0,x1,x2,x3,y,left,span,right){
+  let s=LN(x0,y,x3,y,DMUT,THIN);
+  for(const x of [x0,x1,x2,x3]) s+=LN(x,y-4,x,y+4,DMUT,THIN);
+  s+=TX((x1+x2)/2,y-6,fmt(span)+'" cabinets',8.5,'middle',DMUT);
+  s+=TX(x0+3,y+12,'L wall '+fmt(left)+'"',7.5,'start',DMUT);
+  s+=TX(x3-3,y+12,'R wall '+fmt(right)+'"',7.5,'end',DMUT);
+  return s;
+}
 function dimVr(y1,y2,x,label){
   let s=LN(x-4,y1,x+4,y1,DMUT,THIN)+LN(x-4,y2,x+4,y2,DMUT,THIN)+LN(x,y1,x,y2,DMUT,THIN);
   return s+TX(x+6,(y1+y2)/2+3,label,8.5,'start',DMUT);
@@ -5623,13 +5634,12 @@ function dimV(y1,y2,x,label){
    the prep-screen preview is the only caller that turns it on. */
 function drawRunAssembly(run,Rn,cfg,opts){
   const cabs=Rn.cabs, n=cabs.length;
-  const segs=faceFrameSegments(Rn), ff=segs.length>0;
   const span=cabs.reduce((a,c)=>a+c.w,0)+Rn.gaps.reduce((a,b)=>a+b,0);
   const sL=Rn.scribeL??Rn.scribe, sR=Rn.scribeR??Rn.scribe;
   const totalW=span+sL+sR;
   const hOf=c=>run==='upper'?c.h:c.h-cfg.toe_kick_height-cfg.countertop_thickness;
   const maxH=Math.max(...cabs.map(hOf));
-  const M=54, TOPM=16;
+  const M=54, TOPM=34;
   const s=(DW-M-14)/totalW;
   const H=maxH*s;
   let g='', x=M+sL*s;
@@ -5648,30 +5658,8 @@ function drawRunAssembly(run,Rn,cfg,opts){
       x+=w+gp;
     }else x+=w;
   });
-  if(ff){
-    const fw=cfg.face_frame_width*s, railW=(run==='upper'?cfg.upper_rail_width:cfg.lower_rail_width)*s;
-    const starts=[]; let runX=0;
-    cabs.forEach((c,i)=>{ starts.push(runX); runX+=c.w+(i<n-1?(Rn.gaps[i]||0):0); });
-    segs.forEach(seg=>{
-      const lOH=(seg.start===0&&Rn.fitL)?sL:cfg.ff_overhang;
-      const rOH=(seg.end===n-1&&Rn.fitR)?sR:cfg.ff_overhang;
-      const sx=M+(sL+starts[seg.start]-lOH)*s;
-      const lSt=(cfg.ff_overhang+lOH)*s, rSt=(cfg.ff_overhang+rOH)*s;
-      const sSpan=seg.cabs.reduce((a,c)=>a+c.w,0)+seg.gaps.reduce((a,b)=>a+b,0);
-      const segH=Math.max(...seg.cabs.map(hOf))*s;
-      const fW=(sSpan+lOH+rOH)*s;
-      g+=R(sx,TOPM,fW,segH,'none',DACC,DASH+THIN);
-      g+=R(sx,TOPM,lSt,segH,'rgba(29,95,138,.10)',DACC,THIN);
-      g+=R(sx+fW-rSt,TOPM,rSt,segH,'rgba(29,95,138,.10)',DACC,THIN);
-      g+=R(sx,TOPM,fW,railW,'rgba(29,95,138,.10)',DACC,THIN);
-      g+=R(sx,TOPM+segH-railW,fW,railW,'rgba(29,95,138,.10)',DACC,THIN);
-      let px=sx+lOH*s;
-      seg.cabs.forEach((c,i)=>{
-        px+=c.w*s;
-        if(i<seg.cabs.length-1){ px+=(seg.gaps[i]||0)*s; g+=R(px-fw/2,TOPM,fw,segH,'rgba(29,95,138,.10)',DACC,THIN); }
-      });
-    });
-  }
+  /* This is the carcass drawing. Face frames have their own Build tab, so showing
+     them here obscured the box sides and made the two drawings look redundant. */
   g+=R(M,TOPM,sL*s,H,'rgba(0,0,0,.05)','#b9c2ca',THIN);
   g+=R(M+(sL+span)*s,TOPM,sR*s,H,'rgba(0,0,0,.05)','#b9c2ca',THIN);
   /* Fronts sit on top of the frame, the way an overlay door actually does. Each one
@@ -5721,12 +5709,14 @@ function drawRunAssembly(run,Rn,cfg,opts){
       fx+=w+((i<n-1)?(Rn.gaps[i]||0)*s:0);
     });
   }
-  const by=TOPM+H+22;
-  g+=dimH(M,M+totalW*s,by,fmt(totalW)+'" wall to wall');
+  g+=dimH(M,M+totalW*s,TOPM-12,fmt(totalW)+'" wall to wall');
+  const by=TOPM+H+18;
   let dx=M+sL*s;
-  cabs.forEach((c,i)=>{ g+=dimH(dx,dx+c.w*s,by+16,fmt(c.w)); dx+=c.w*s+(Rn.gaps[i]||0)*s; });
+  cabs.forEach((c,i)=>{ g+=dimH(dx,dx+c.w*s,by,fmt(c.w)); dx+=c.w*s+(Rn.gaps[i]||0)*s; });
+  const runL=M+sL*s, runR=runL+span*s;
+  g+=dimRunWidth(M,runL,runR,M+totalW*s,by+20,sL,span,sR);
   g+=dimV(TOPM,TOPM+H,M-12,fmt(maxH));
-  return svgBox(DW,by+26,g);
+  return svgBox(DW,by+38,g);
 }
 
 function drawRunPlan(Rn,cfg){
