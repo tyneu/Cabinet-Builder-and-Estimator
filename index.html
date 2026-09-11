@@ -447,7 +447,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.30</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.31</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -2210,7 +2210,7 @@ const CUTOPT=(()=>{
    layout in hand. No worker (blocked, or an old browser) means the search runs in the
    page exactly as it always did. */
 const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
-const NEST_CACHE_VERSION='1.29';
+const NEST_CACHE_VERSION='1.31';
 const NEST_MEMO=new Map();                 // this session: signature -> engine result
 let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
 let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
@@ -4796,12 +4796,8 @@ function viewLayout(tb,sum){
 
 function viewCut(tb,sum,g){
   const cfg=RESULT.cfg;
-  const pcs=g.parts.reduce((a,p)=>a+p.qty,0);
-  const sqft=g.sheetParts.reduce((a,p)=>a+p.L*p.W*p.qty,0)/144;
   const lin=g.linearParts.reduce((a,p)=>a+p.L*p.qty,0)/12;
-  sum.innerHTML='<div>Pieces<b>'+pcs+'</b></div>'+
-    (g.nest?'<div>Sheets<b>'+g.nest.sheets+'</b></div><div>Sheet area<b>'+sqft.toFixed(1)+' sq ft</b></div>':'')+
-    (g.sticks?'<div>Sticks<b>'+g.sticks.length+'</b></div><div>Linear feet<b>'+lin.toFixed(1)+'</b></div>':'');
+  sum.innerHTML=(g.sticks?'<div>Sticks<b>'+g.sticks.length+'</b></div><div>Linear feet<b>'+lin.toFixed(1)+' ft</b></div>':'');
   /* v1.27: one row per part — same name, material and size — with every cabinet it goes
      into listed and the quantities added up, in the order the parts first appear. The
      per-cabinet header rows went with it. The CSV export still has a row per cabinet. */
@@ -4872,25 +4868,25 @@ function stickSVG(st,cfg){
 function viewMap(body,sum,g){
   const cfg=RESULT.cfg;
   const N=g.nest;
-  sum.innerHTML=(N?'<div>Sheets<b>'+N.sheets+'</b></div><div>Saw passes<b>'+N.cuts+'</b></div>'+ 
-      '<div>Fence changes<b>'+N.fenceChanges+'</b></div><div>Sheet scrap<b>'+(N.scrapArea/144).toFixed(1)+' sq ft</b></div>':'')+
-    (g.sticks?'<div>Sticks of '+fmt(cfg.stock_length/12)+' ft<b>'+g.sticks.length+'</b></div>':'')+
+  sum.innerHTML=(g.sticks?'<div>Sticks of '+fmt(cfg.stock_length/12)+' ft<b>'+g.sticks.length+'</b></div>':'')+
     (g.boards&&g.boards.panels.length
       ?'<div>Boards used<b>'+g.boards.boardsUsed+'</b></div>'+
        '<div>Board scrap<b>'+(g.boards.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
        (g.boards.unplaced.length?'<div>Not placed<b>'+g.boards.unplaced.length+'</b></div>':'')
       :'');
   let h='';
-  if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts used / reusable</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
-    for(const m of N.materials)
-      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+' / '+m.newOffcuts.length+
-        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td><td style="font-size:12px">'+esc(m.strategy||'—')+'</td></tr>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Pieces</th><th class="n">Offcuts used / reusable</th><th class="n">Saw passes / fence changes</th></tr></thead><tbody>';
+    for(const m of N.materials){
+      const mp=g.sheetParts.filter(p=>p.mat===m.material);
+      const pieces=mp.reduce((a,p)=>a+p.qty,0);
+      const area=mp.reduce((a,p)=>a+p.L*p.W*p.qty,0)/144;
+      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+pieces+'</td><td class="n">'+m.offcutsUsed+' / '+m.newOffcuts.length+
+        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td></tr>'+ 
+        '<tr><td colspan="5" style="padding-top:3px;color:var(--ink-2);font-size:12px">Sheet area <b style="color:var(--ink)">'+area.toFixed(1)+' sq ft</b> · Sheet scrap <b style="color:var(--ink)">'+
+        ((m.metrics?.scrapArea||0)/144).toFixed(1)+' sq ft</b></td></tr>';
+    }
     h+='</tbody></table></div>';
-    h+='<div class="legend" style="margin-top:14px"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>offcut, keep &amp; log</span>'+
-      '<span><i style="background:#f7d6d6;border-color:#d99999"></i>scrap</span>'+
-      '<span><i style="background:#fff;border-color:#d33"></i>red dash = breakdown cut</span></div>';
     for(const m of N.materials){
       const sm=matOf(m.material), size=sm?fmt(sm.w)+'"×'+fmt(sm.l)+'"':'';
       h+='<h3 style="font-size:14px;margin:14px 0 8px">'+esc(m.material)+' — '+m.sheets+' sheet(s) '+size+
@@ -4933,6 +4929,7 @@ function viewMap(body,sum,g){
     });
     h+='</div>';
   }
+  if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   body.innerHTML=h||'<div class="hint">Nothing to cut in this group.</div>';
 }
 
