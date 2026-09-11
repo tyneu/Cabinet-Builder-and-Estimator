@@ -271,8 +271,8 @@ button{font:inherit;font-weight:650;border-radius:8px;border:1px solid transpare
 .sec.sel{background:var(--blue-deep);color:#fff}
 .subtabs{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .subtabs .tab{flex:0 0 auto;min-width:0;padding:7px 12px}
-table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
-th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
+table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
   border-bottom:2px solid var(--ink);padding:6px 5px}
 td{padding:6px 5px;border-bottom:1px solid var(--line)}
 td.n,th.n{text-align:right}
@@ -296,6 +296,16 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .cutlisthead{font-size:13px;margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
 .searchbar{border:1px solid var(--line-hard);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:#fff}
 .searchbar .stext{font-size:13px;line-height:1.45}
+.searchcompare{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:9px}
+.searchcompare>div{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;line-height:1.5}
+.searchcompare b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2)}
+.fatalwarn{background:#8b1e22;color:#fff;border-radius:10px;padding:13px 14px;margin-bottom:12px;line-height:1.45}
+.fatalwarn b{display:block;font-size:17px;margin-bottom:3px}
+.cutplan{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:7px;background:#fff;font-size:12px}
+.cutplan h4{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--blue-deep)}
+.fencerun{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-weight:700;color:var(--blue-deep)}
+.cutstep{display:grid;grid-template-columns:28px 1fr;gap:6px;padding:3px 0;line-height:1.35}
+.cutstep b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px}
 .sbar{height:5px;border-radius:3px;background:var(--sky);margin-top:8px;overflow:hidden}
 .sbar i{display:block;height:100%;background:var(--blue);transition:width .3s}
 .warnbtn{display:inline-block;margin-top:6px;padding:5px 10px;font-size:12px;border-radius:7px;
@@ -322,7 +332,7 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .assump{font-size:11.5px;color:var(--ink-2);line-height:1.55;padding-left:18px;margin:0}
 .assump li{margin-bottom:3px}
 .sheetwrap{margin-bottom:18px}
-.sheetwrap h3{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);margin-bottom:6px}
+.sheetwrap h3{font-size:13px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2);margin-bottom:6px}
 .sheetwrap svg{width:100%;height:auto;display:block;border-radius:6px}
 .boardrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
   align-items:start;margin-bottom:14px}
@@ -331,7 +341,7 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .boardcell h3{font-size:9px;text-transform:uppercase;letter-spacing:.05em;
   color:var(--ink-2);margin:5px 0 0;line-height:1.25;text-align:center}
 .boardcell svg{width:100%;height:auto;display:block}
-.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:var(--ink-2);margin-bottom:12px}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--ink-2);margin-bottom:12px}
 .legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:4px;vertical-align:-1px;border:1px solid #999}
 details.cfg summary{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-2);
   font-weight:650;cursor:pointer;list-style:none}
@@ -442,7 +452,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.27</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.28</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -550,6 +560,12 @@ body.printing .wrap{padding-bottom:120px}
         <option value="later">Separate cut map</option>
       </select></div>
     </div>
+    <div style="margin-bottom:10px"><label>Optimize cut maps for</label><select id="opt_mode">
+      <option value="balanced">Balanced</option>
+      <option value="fast">Fewest cuts &amp; fence changes</option>
+      <option value="scrap">Least scrap</option>
+      <option value="offcuts">Fewest, largest reusable offcuts</option>
+    </select><div class="fieldnote">Sheet count is always minimized first. The preference chooses between layouts using that minimum.</div></div>
     <div class="deflabel" style="margin:2px 0 6px">Offcut rack, per cut map</div>
     <div class="grid g2" style="margin-bottom:8px">
       <div><label>Carcass — pull</label><select id="off_use_cab">
@@ -857,7 +873,7 @@ body.printing .wrap{padding-bottom:120px}
     <li>Widths round to <span data-av="width_round">1/8"</span>; leftover becomes even scribe gaps at both walls.</li>
     <li>Every full sheet gets one breakdown crosscut between 36" and 60". A part longer than a half sheet (toe kick rails, long runners) is ripped off the whole sheet first, and the rest of that sheet is broken down after.</li>
     <li>Sheet layouts come from the Plywood Cut Optimizer v2 search. Identical parts are internally grouped to reuse fence settings, but the cut map leaves those working groups unmarked. Fewest sheets comes first: a sheet is only added when no layout at the lower count can be found.</li>
-    <li>Offcuts 6" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
+    <li>Offcuts 4" or better on both sides and 1 sq ft or more go to inventory and get used on the next job.</li>
     <li>Drawer boxes: sides run the full depth, front and back dadoed into each side, bottom in a dado all round. Stock thicknesses come from the Plywood &amp; saw actuals.</li>
     <li>Box depth takes the back-panel offset off the cabinet depth, then rounds down to the longest slide on hand. Overlay fronts on a face frame gain the frame thickness back.</li>
     <li>On a face frame, the drawer opening is the cabinet width less one stile width, assuming the stile straddles the seam between neighbouring boxes.</li>
@@ -900,10 +916,10 @@ body.printing .wrap{padding-bottom:120px}
 let KERF=0.125;
 /* The sheet being nested. Set per material before packing it, the same way KERF is,
    so a sheet that really is 49 x 97 nests as 49 x 97 rather than as a nominal 4x8. */
-let SHEET_W=48, SHEET_L=96;
+let SHEET_W=48, SHEET_L=96, OPT_MODE='balanced';
 const EPS=1e-9;
 const CENTER_LO=36, CENTER_HI=60;
-const STORE_MIN_DIM=6, STORE_MIN_AREA=144;
+const STORE_MIN_DIM=4, STORE_MIN_AREA=144;
 const r4=v=>Math.round(v*1e6)/1e6;   // 1/32 and 1/64 need more than 4 places
 
 function orient(L,S,bw,bl,mode,noRotate){
@@ -1249,7 +1265,8 @@ const CUTOPT=(()=>{
     });
     stacks.forEach(a => stacks.forEach(b => add(a + KERF + b)));
     return [...values]
-      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS && SHEET_L - v - KERF > 0)
+      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS &&
+        SHEET_L - v - KERF >= FIRST_MIN - EPS && SHEET_L - v - KERF <= FIRST_MAX + EPS)
       .sort((a, b) => a - b);
   }
 
@@ -1906,6 +1923,13 @@ const CUTOPT=(()=>{
     return c.wasteArea * .08 + c.cutCount * 2 + c.fenceChanges * 8 + c.unmatchedParts * 5 + c.typeSpread * 6 + c.offcutCount * 3 - c.repeatedSheets * 14 - c.longestOffcutSide * .12 - c.largestOffcut * .003;
   }
 
+  function objectiveRaw(c) {
+    if (OPT_MODE === 'fast') return c.cutCount * 5 + c.fenceChanges * 18 + c.timeSeconds * .02 + c.wasteArea * .005;
+    if (OPT_MODE === 'scrap') return c.wasteArea * 2 + c.cutCount * .25 + c.fenceChanges * .5;
+    if (OPT_MODE === 'offcuts') return c.offcutCount * 180 - c.largestOffcut * .08 - c.longestOffcutSide * 2 + c.wasteArea * .12;
+    return balancedRaw(c);
+  }
+
   function addToPool(pool, candidate) {
     if (!candidate) return pool;
     const signature = candidate.sheets.map(s => formatInches(s.firstCut)).join('|') + ':' + candidate.cutCount + ':' +
@@ -1916,7 +1940,7 @@ const CUTOPT=(()=>{
     pool = pool.filter(p => !dominates(candidate, p));
     pool.push(candidate);
     if (pool.length > 70) {
-      pool.sort((a, b) => balancedRaw(a) - balancedRaw(b));
+      pool.sort((a, b) => objectiveRaw(a) - objectiveRaw(b));
       pool.length = 70;
     }
     return pool;
@@ -1946,7 +1970,15 @@ const CUTOPT=(()=>{
       out.push({label, candidate, note});
     };
     const balanced = normalizedBest(minPool, ['wasteArea', 'cutCount', 'fenceChanges', 'unmatchedParts', 'typeSpread', 'offcutCount', c => -c.largestOffcut, c => -c.repeatedSheets, c => -c.longestOffcutSide]);
-    push(balanced.unmatchedParts === 0 ? 'Balanced · fully batched' : 'Balanced', balanced, 'Minimum-sheet compromise');
+    const preferred=OPT_MODE==='fast'
+      ? [...minPool].sort((a,b)=>a.cutCount-b.cutCount||a.fenceChanges-b.fenceChanges||a.timeSeconds-b.timeSeconds||a.wasteArea-b.wasteArea)[0]
+      : OPT_MODE==='scrap'
+        ? [...minPool].sort((a,b)=>a.wasteArea-b.wasteArea||a.cutCount-b.cutCount||a.fenceChanges-b.fenceChanges)[0]
+        : OPT_MODE==='offcuts'
+          ? [...minPool].sort((a,b)=>a.offcutCount-b.offcutCount||b.largestOffcut-a.largestOffcut||b.longestOffcutSide-a.longestOffcutSide||a.wasteArea-b.wasteArea)[0]
+          : balanced;
+    const prefLabel=OPT_MODE==='fast'?'Fastest cutting':OPT_MODE==='scrap'?'Least scrap':OPT_MODE==='offcuts'?'Best offcuts':(preferred.unmatchedParts===0?'Balanced · fully batched':'Balanced');
+    push(prefLabel, preferred, 'Minimum-sheet layout using the selected preference');
     push('Grouped by part', [...minPool].sort((a, b) =>
       a.typeSpread - b.typeSpread || a.unmatchedParts - b.unmatchedParts || a.cutCount - b.cutCount)[0], 'Each part type kept on as few sheets as possible');
     push('Repeat sheets', [...minPool].sort((a, b) =>
@@ -2129,7 +2161,9 @@ const CUTOPT=(()=>{
        [index] Fewer sheets come first: before a sheet is added, the same count is
        searched again with loose trials, which find tight layouts that v2's run-first
        trials rarely reach. */
-    for (; sheetCount <= minimum + 4; sheetCount++) {
+    /* A hard +4 limit could report a false failure. In the worst case every fitting
+       part can have its own sheet, so that count is a safe, finite upper bound. */
+    for (; sheetCount <= Math.max(minimum, v2parts.length); sheetCount++) {
       const first = sheetCount === minimum;
       const n = first ? trials : Math.max(500, Math.ceil(trials * .35));
       for (const loose of [false, true]) {
@@ -2156,13 +2190,19 @@ const CUTOPT=(()=>{
       return out;
     });
     const longNames = [...new Set(v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.name))];
+    const sequences=c.sheets.map(sheet=>c.schedule.filter(x=>x.sheet===sheet.index).map((x,i)=>({
+      n:i+1, setting:r4(x.setting), axis:x.axis, initial:!!x.initial, label:x.label||'Cut'
+    })));
     return {
-      sheets, label: pick.label, longNames,
+      sheets, sequences, label: pick.label, longNames,
       /* [index] How Keep searching compares two layouts for the same parts: fewer sheets,
          then the engine's own balanced score (lower is better). */
-      score: {sheets: c.sheets.length, raw: balancedRaw(c)},
+      score: {sheets: c.sheets.length, raw: objectiveRaw(c), cuts:c.cutCount,
+        fenceChanges:c.fenceChanges, scrapArea:r4(c.wasteArea), offcutCount:c.offcutCount,
+        largestOffcut:r4(c.largestOffcut)},
       openSheets: c.sheets.filter(s => s.placements.some(p => Math.max(p.w, p.h) > halfMax() + EPS)).length,
-      metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges}
+      metrics: {cuts: c.cutCount, fenceChanges: c.fenceChanges, scrapArea:r4(c.wasteArea),
+        offcutCount:c.offcutCount, largestOffcut:r4(c.largestOffcut)}
     };
   }
 
@@ -2179,6 +2219,7 @@ const CUTOPT=(()=>{
    layout in hand. No worker (blocked, or an old browser) means the search runs in the
    page exactly as it always did. */
 const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
+const NEST_CACHE_VERSION='1.28';
 const NEST_MEMO=new Map();                 // this session: signature -> engine result
 let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
 let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
@@ -2190,10 +2231,37 @@ function nestHash(str){
 /* Everything the engine reads: the parts, the trial count, the kerf and the sheet. */
 function nestReq(parts,trials){
   const ps=parts.map(p=>({id:p.id,L:p.L,S:p.S,name:p.name}));
-  const sig=nestHash(JSON.stringify([KERF,SHEET_W,SHEET_L,trials,ps.map(p=>[p.id,p.name,r4(p.L),r4(p.S)])]));
-  return {sig,parts:ps,trials,kerf:KERF,W:SHEET_W,L:SHEET_L};
+  const mode=document.getElementById('opt_mode')?.value||'balanced';
+  const sig=nestHash(JSON.stringify([NEST_CACHE_VERSION,mode,KERF,SHEET_W,SHEET_L,trials,ps.map(p=>[p.id,p.name,r4(p.L),r4(p.S)])]));
+  return {sig,parts:ps,trials,kerf:KERF,W:SHEET_W,L:SHEET_L,mode};
 }
 const nestClone=o=>JSON.parse(JSON.stringify(o));
+function validNestResult(res,req){
+  if(!res||res.error||!Array.isArray(res.sheets)||!res.score||!res.metrics) return false;
+  const need=new Map(req.parts.map(p=>[p.id,p])), seen=new Set();
+  for(const sh of res.sheets){
+    if(!Array.isArray(sh)) return false;
+    const rects=[];
+    for(const p of sh){
+      if(!p||!['part','offcut','cut-line'].includes(p.kind)||![p.x,p.y,p.w,p.h].every(Number.isFinite)) return false;
+      if(p.x<-EPS||p.y<-EPS||p.w<-EPS||p.h<-EPS||p.x+p.w>req.W+EPS||p.y+p.h>req.L+EPS) return false;
+      if(p.kind==='cut-line'){
+        if(p.y<CENTER_LO-EPS||p.y>CENTER_HI+EPS) return false;
+        continue;
+      }
+      for(const q of rects) if(p.x<q.x+q.w-EPS&&p.x+p.w>q.x+EPS&&p.y<q.y+q.h-EPS&&p.y+p.h>q.y+EPS) return false;
+      rects.push(p);
+      if(p.kind==='part'){
+        const src=need.get(p.id);
+        if(!src||seen.has(p.id)) return false;
+        const ok=(Math.abs(p.w-src.S)<EPS&&Math.abs(p.h-src.L)<EPS)||(Math.abs(p.w-src.L)<EPS&&Math.abs(p.h-src.S)<EPS);
+        if(!ok) return false;
+        seen.add(p.id);
+      }
+    }
+  }
+  return seen.size===need.size&&[res.score.sheets,res.score.raw,res.metrics.cuts,res.metrics.fenceChanges].every(Number.isFinite);
+}
 function nestRemember(sig,res){
   NEST_MEMO.delete(sig); NEST_MEMO.set(sig,res);
   while(NEST_MEMO.size>40) NEST_MEMO.delete(NEST_MEMO.keys().next().value);
@@ -2201,11 +2269,14 @@ function nestRemember(sig,res){
 function nestFor(parts,trials){
   const req=nestReq(parts,trials);
   if(NEST_USED) NEST_USED.set(req.sig,req);
-  const hit=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+  let hit=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+  if(hit&&!hit.error&&!validNestResult(hit,req)){
+    delete JOB_NEST_BEST[req.sig]; NEST_MEMO.delete(req.sig); hit=null;
+  }
   if(hit){ if(hit.error) throw new Error(hit.error); return nestClone(hit); }
   if(NESTER.ok()){ NESTER.want=req; throw NEST_PENDING; }
   let res;
-  try{ res=CUTOPT.nest(parts,trials); }
+  try{ OPT_MODE=req.mode; res=CUTOPT.nest(parts,trials); }
   catch(e){ nestRemember(req.sig,{error:String(e&&e.message||e)}); throw e; }
   nestRemember(req.sig,res);
   return nestClone(res);
@@ -2213,7 +2284,7 @@ function nestFor(parts,trials){
 const NEST_WORKER_TAIL=`
 self.onmessage=function(e){
   var m=e.data;
-  KERF=m.kerf; SHEET_W=m.W; SHEET_L=m.L;
+  KERF=m.kerf; SHEET_W=m.W; SHEET_L=m.L; OPT_MODE=m.mode||'balanced';
   try{ var res=CUTOPT.nest(m.parts,m.trials,m.seed); self.postMessage({id:m.id,ok:true,res:res}); }
   catch(err){ self.postMessage({id:m.id,ok:false,error:String(err&&err.message||err)}); }
 };`;
@@ -2222,14 +2293,16 @@ const NESTER={
   ok(){ return !this.broken&&(!!this.w||this.start()); },
   source(){ return document.getElementById('nest-engine').textContent+NEST_WORKER_TAIL; },
   start(){
+    let url=null;
     try{
       if(typeof Worker!=='function'||typeof Blob!=='function'||!URL.createObjectURL) throw new Error('no worker');
-      const url=URL.createObjectURL(new Blob([this.source()],{type:'text/javascript'}));
+      url=URL.createObjectURL(new Blob([this.source()],{type:'text/javascript'}));
       const w=new Worker(url);
+      URL.revokeObjectURL(url); url=null;
       w.onmessage=e=>{ const d=e.data, p=this.waits.get(d&&d.id); if(!p) return; this.waits.delete(d.id); p.resolve(d); };
       w.onerror=ev=>{ try{ ev.preventDefault(); }catch(_){} this.fail(); };
       this.w=w; return true;
-    }catch(e){ this.broken=true; this.w=null; return false; }
+    }catch(e){ if(url) try{URL.revokeObjectURL(url);}catch(_){} this.broken=true; this.w=null; return false; }
   },
   /* A worker that errors is not tried again this session; the page takes over. */
   fail(){ this.broken=true; this.drop(new Error('nesting worker failed')); },
@@ -2246,7 +2319,7 @@ const NESTER={
     const id=++this.seq;
     return new Promise((resolve,reject)=>{
       this.waits.set(id,{resolve,reject});
-      this.w.postMessage({id,parts:req.parts,trials:req.trials,kerf:req.kerf,W:req.W,L:req.L,seed:seed??13579});
+      this.w.postMessage({id,parts:req.parts,trials:req.trials,kerf:req.kerf,W:req.W,L:req.L,mode:req.mode,seed:seed??13579});
     });
   }
 };
@@ -2261,8 +2334,12 @@ let BUILD_SEQ=0, BUILD_PENDING=false;
    the job is rebuilt after each find before the search moves on. Found layouts are
    saved with the job; Reset goes back to the standard search. */
 const SEARCH_ROUNDS=20;
-const SEARCH={on:false,token:0,round:0,step:0,steps:0,found:0,startSheets:0,msg:''};
-const nestBetter=(a,b)=>!!a&&!!b&&(a.sheets<b.sheets||(a.sheets===b.sheets&&a.raw<b.raw-1e-6));
+const SEARCH={on:false,token:0,round:0,step:0,steps:0,found:0,startSheets:0,msg:'',offer:null};
+/* Never call a same-sheet result "better" if it increases either shop-time measure.
+   The user chooses before any qualifying candidate replaces the current map. */
+const nestBetter=(a,b)=>!!a&&!!b&&(a.sheets<b.sheets||(a.sheets===b.sheets&&
+  a.cuts<=b.cuts&&a.fenceChanges<=b.fenceChanges&&
+  (a.cuts<b.cuts||a.fenceChanges<b.fenceChanges||a.raw<b.raw-1e-6)));
 const sheetTotal=()=>RESULT?RESULT.groups.reduce((n,g)=>n+(g.nest?g.nest.sheets:0),0):0;
 function stopSearch(){
   if(!SEARCH.on) return;
@@ -2276,6 +2353,14 @@ function searchBar(){
 }
 function searchBarInner(){
   const kept=Object.keys(JOB_NEST_BEST).length;
+  if(SEARCH.offer){
+    const a=SEARCH.offer.before.score,b=SEARCH.offer.after.score;
+    const line=x=>x.sheets+' sheets · '+x.cuts+' cuts · '+x.fenceChanges+' fence changes · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap';
+    return '<div class="stext"><b>A different layout was found.</b> Compare it before changing the cut map.</div>'+ 
+      '<div class="searchcompare"><div><b>Current</b>'+line(a)+'</div><div><b>Candidate</b>'+line(b)+'</div></div>'+ 
+      '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="accept">Use candidate</button>'+ 
+      '<button type="button" class="btn-ghost btn-sm" data-s="reject">Keep current</button></div>';
+  }
   if(SEARCH.on)
     return '<div class="stext"><b>Searching</b> · round '+SEARCH.round+' of '+SEARCH.rounds+
       ', layout '+SEARCH.step+' of '+SEARCH.steps+' · '+
@@ -2302,7 +2387,7 @@ async function keepSearching(){
   if(!NESTER.ok()) return toast('Keep searching needs background nesting, which this browser has blocked.');
   const token=++SEARCH.token;
   Object.assign(SEARCH,{on:true,round:0,rounds:SEARCH_ROUNDS,step:0,steps:LAST_NEST_REQS.size,found:0,
-                        startSheets:sheetTotal(),msg:''});
+                        startSheets:sheetTotal(),msg:'',offer:null});
   paintSearch();
   const live=()=>SEARCH.on&&token===SEARCH.token;
   try{
@@ -2318,16 +2403,11 @@ async function keepSearching(){
         const seed=(Math.imul(round,2654435761)^parseInt(req.sig.slice(0,8),16))>>>0;
         const d=await NESTER.run({...req,trials:req.trials*2},seed);
         if(!live()) break;
-        if(d.ok&&nestBetter(d.res.score,cur.score)){
-          JOB_NEST_BEST[req.sig]=d.res;
-          SEARCH.found++;
-          const seq=BUILD_SEQ;
-          build({quiet:true});
-          if(BUILD_SEQ===seq){                    // the job would not rebuild (an entry or a material prompt)
-            SEARCH.msg='The search stopped because the job needs attention before it can rebuild.';
-            SEARCH.on=false; break; }
-          await afterBuild();
-          break;                                  // later materials' parts may have changed: next round works from the rebuilt job
+        if(d.ok&&validNestResult(d.res,req)&&nestBetter(d.res.score,cur.score)){
+          SEARCH.offer={sig:req.sig,before:cur,after:d.res};
+          SEARCH.on=false;
+          paintSearch();
+          return;
         }
       }
     }
@@ -2339,6 +2419,16 @@ async function keepSearching(){
   }finally{
     if(token===SEARCH.token){ SEARCH.on=false; paintSearch(); if(SEARCH.found) toast(SEARCH.msg||'Search finished.',true); }
   }
+}
+
+function acceptSearchOffer(){
+  const o=SEARCH.offer; if(!o) return;
+  JOB_NEST_BEST[o.sig]=o.after; SEARCH.offer=null; SEARCH.msg='Candidate applied.';
+  build({quiet:true});
+}
+function rejectSearchOffer(){
+  if(!SEARCH.offer) return;
+  SEARCH.offer=null; SEARCH.msg='Current layout kept.'; paintSearch();
 }
 
 function packMaterial(material,matParts,stockOffcuts){
@@ -2361,10 +2451,10 @@ function packMaterial(material,matParts,stockOffcuts){
       remaining=remaining.filter(p=>!done.has(p.id));
     }
   }
-  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
+  let sheets=[],sequences=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
   if(remaining.length){
     const res=nestFor(remaining,cutTrials(remaining.length));
-    ({sheets,metrics,openSheets,longNames}=res);
+    ({sheets,sequences=[],metrics,openSheets,longNames}=res);
     strategy=res.label;
     for(const sh of sheets) for(const p of sh)
       if(p.kind==='offcut'&&p.tier==='inventory')
@@ -2375,14 +2465,15 @@ function packMaterial(material,matParts,stockOffcuts){
   const sheetKey=sh=>sh.map(p=>[p.kind,p.name,Math.round(p.x*64),Math.round(p.y*64),
     Math.round(p.w*64),Math.round(p.h*64)].join(',')).sort().join(';');
   const alike=[];
-  for(const sh of sheets){
+  for(let si=0;si<sheets.length;si++){
+    const sh=sheets[si];
     const key=sheetKey(sh), same=alike.find(a=>a.key===key);
-    if(same) same.runs++; else alike.push({key,sh,runs:1});
+    if(same) same.runs++; else alike.push({key,sh,seq:sequences[si]||[],runs:1});
   }
   let upTo=0;
   const panels=alike.map(a=>{
     const from=upTo+1; upTo+=a.runs;
-    return {placements:a.sh,w:SHEET_W,l:SHEET_L,runs:a.runs,
+    return {placements:a.sh,cutSequence:a.seq,w:SHEET_W,l:SHEET_L,runs:a.runs,
       label:a.runs>1?`Sheets ${from}\u2013${upTo}/${sheets.length} \u00b7 run this layout \u00d7${a.runs}`:`Sheet ${from}/${sheets.length}`};
   }).concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
   return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,unplaced,
@@ -4389,7 +4480,7 @@ function build(opts){
         btn.disabled=false; btn.textContent=RESULT?'Rebuild':'Build cut list'; throw e; }
       const req=NESTER.want;
       NESTER.run(req).then(d=>{
-        nestRemember(req.sig,d.ok?d.res:{error:d.error});
+        nestRemember(req.sig,d.ok&&validNestResult(d.res,req)?d.res:{error:d.ok?'optimizer returned an invalid layout':d.error});
         pass();
       },err=>{
         if(err!==NEST_STOPPED) NESTER.fail();      // broken worker: finish in the page
@@ -4543,12 +4634,17 @@ function runNesting(parts,cfg,stock){
     const md=matOf(m);
     SHEET_L=md&&md.l>0?md.l:96;
     SHEET_W=md&&md.w>0?md.w:48;
+    if(matKind(m)==='sheet'&&(SHEET_L<72+KERF-EPS||SHEET_L>120+KERF+EPS))
+      throw new Error(m+' has an invalid sheet length. The required first cut must leave two sections between 36" and 60".');
     out.push(packMaterial(m,mine,stock));
   }
   SHEET_L=96; SHEET_W=48;
   return {materials:out,banked:out.flatMap(r=>r.newOffcuts),
           sheets:out.reduce((a,m)=>a+m.sheets,0),
-          offcutsUsed:out.reduce((a,m)=>a+m.offcutsUsed,0)};
+          offcutsUsed:out.reduce((a,m)=>a+m.offcutsUsed,0),
+          cuts:out.reduce((a,m)=>a+(m.metrics?.cuts||0),0),
+          fenceChanges:out.reduce((a,m)=>a+(m.metrics?.fenceChanges||0),0),
+          scrapArea:out.reduce((a,m)=>a+(m.metrics?.scrapArea||0),0)};
 }
 
 function tabDefs(){
@@ -4616,7 +4712,8 @@ function render(){
   const sum=document.getElementById('resSummary');
   const body=document.getElementById('resBody');
   const warnBox=document.getElementById('resWarn');
-  warnBox.innerHTML=RESULT.warns.map(w=>'<div class="warn">'+w+'</div>').join('');
+  warnBox.innerHTML=(RESULT.complete?'':'<div class="fatalwarn"><b>INCOMPLETE — DO NOT CUT</b>Required pieces are missing. Fix the entries or material sizes and rebuild before using this plan.</div>')+
+    RESULT.warns.map(w=>'<div class="warn">'+esc(w)+'</div>').join('');
   body.innerHTML='<div class="tblwrap"><table id="resTable"></table></div>';
   const tb=document.getElementById('resTable');
   const title=tabDefs().find(t=>t.id===VIEW).label;
@@ -4728,7 +4825,7 @@ function viewCut(tb,sum,g){
     return [...m.values()];
   };
   const cabTxt=e=>e.cabs.map(c=>c==='TK'?'toe kick':c).join(', ');
-  const row=(e,mat)=>'<tr><td>'+cabTxt(e)+'</td><td>'+e.name+'</td><td>'+mat+'</td><td class="n dim">'+fmt(e.L)+
+  const row=(e,mat)=>'<tr><td>'+esc(cabTxt(e))+'</td><td>'+esc(e.name)+'</td><td>'+esc(mat)+'</td><td class="n dim">'+fmt(e.L)+
     '"</td><td class="n dim">'+fmt(e.W)+'"</td><td class="n">'+e.qty+'</td></tr>';
   let h='<thead><tr><th>Cabinet #</th><th>Part</th><th>Material</th><th class="n">Length</th><th class="n">Width</th><th class="n">Qty</th></tr></thead><tbody>';
   if(g.sheetParts.length)
@@ -4780,11 +4877,24 @@ function stickSVG(st,cfg){
   return e+'</svg>';
 }
 
+function cutSequenceHTML(panel){
+  const seq=panel.cutSequence||[];
+  if(!seq.length) return '';
+  let h='<div class="cutplan"><h4>Cut &amp; fence sequence</h4>', last=null;
+  for(const s of seq){
+    const setting=fmt(s.setting)+'"';
+    if(setting!==last){ h+='<div class="fencerun">Set fence to '+setting+'</div>'; last=setting; }
+    h+='<div class="cutstep"><b>'+s.n+'</b><span>'+esc(s.label)+(s.initial?' — required breakdown':'')+'</span></div>';
+  }
+  return h+'</div>';
+}
+
 function viewMap(body,sum,g){
   const cfg=RESULT.cfg;
   const N=g.nest;
-  sum.innerHTML=(N?'<div>Sheets<b>'+N.sheets+'</b></div><div>Offcuts used<b>'+N.offcutsUsed+
-      '</b></div><div>Banked<b>'+N.banked.length+'</b></div>':'')+
+  sum.innerHTML=(N?'<div>Sheets<b>'+N.sheets+'</b></div><div>Saw passes<b>'+N.cuts+'</b></div>'+ 
+      '<div>Fence changes<b>'+N.fenceChanges+'</b></div><div>Scrap<b>'+(N.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
+      '<div>Inventory offcuts used<b>'+N.offcutsUsed+'</b></div><div>Reusable offcuts created<b>'+N.banked.length+'</b></div>':'')+
     (g.sticks?'<div>Sticks of '+fmt(cfg.stock_length/12)+' ft<b>'+g.sticks.length+'</b></div>':'')+
     (g.boards&&g.boards.panels.length
       ?'<div>Boards used<b>'+g.boards.boardsUsed+'</b></div>'+
@@ -4794,20 +4904,20 @@ function viewMap(body,sum,g){
   let h='';
   if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Inventory offcuts used</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
     for(const m of N.materials)
-      h+='<tr><td>'+m.material+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
-        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td><td style="font-size:11px">'+(m.strategy||'—')+'</td></tr>';
+      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
+        '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td><td style="font-size:12px">'+esc(m.strategy||'—')+'</td></tr>';
     h+='</tbody></table></div>';
     h+='<div class="legend" style="margin-top:14px"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>offcut, keep &amp; log</span>'+
       '<span><i style="background:#f7d6d6;border-color:#d99999"></i>scrap</span>'+
       '<span><i style="background:#fff;border-color:#d33"></i>red dash = breakdown cut</span></div>';
     for(const m of N.materials){
       const sm=matOf(m.material), size=sm?fmt(sm.w)+'"×'+fmt(sm.l)+'"':'';
-      h+='<h3 style="font-size:13px;margin:14px 0 8px">'+m.material+' — '+m.sheets+' sheet(s) '+size+
+      h+='<h3 style="font-size:14px;margin:14px 0 8px">'+esc(m.material)+' — '+m.sheets+' sheet(s) '+size+
         (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</h3>';
       for(const p of m.panels)
-        h+='<div class="sheetwrap sheetpanel"><h3>'+p.label+'</h3>'+sheetSVG(p)+'</div>';
+        h+='<div class="sheetwrap sheetpanel"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p)+cutSequenceHTML(p)+'</div>';
     }
   }
   if(g.boards&&g.boards.panels.length){
@@ -4858,14 +4968,14 @@ function viewOffcuts(tb,sum,body){
   for(const g of RESULT.groups){
     const made=[...(g.nest?.banked||[]),...(g.boards?.banked||[])];
     if(!made.length) continue;
-    h+='<tr class="grp"><td colspan="4">New off the '+g.label.toLowerCase()+' cutting</td></tr>';
+    h+='<tr class="grp"><td colspan="4">New off the '+esc(g.label.toLowerCase())+' cutting</td></tr>';
     for(const o of made)
-      h+='<tr><td>'+o.material+'</td><td class="n">'+fmt(o.l)+'"</td><td class="n">'+fmt(o.w)+'"</td><td>this job</td></tr>';
+      h+='<tr><td>'+esc(o.material)+'</td><td class="n">'+fmt(o.l)+'"</td><td class="n">'+fmt(o.w)+'"</td><td>this job</td></tr>';
   }
   if(R.unusedStock.length)
     h+='<tr class="grp"><td colspan="4">'+(RESULT.useOff?'Still on the rack':'On the rack — not used this job')+'</td></tr>';
   for(const o of R.unusedStock)
-    h+='<tr><td>'+o.material+'</td><td class="n">'+fmt(o.l)+'"</td><td class="n">'+fmt(o.w)+'"</td><td>'+(o.date||'—')+'</td></tr>';
+    h+='<tr><td>'+esc(o.material)+'</td><td class="n">'+fmt(o.l)+'"</td><td class="n">'+fmt(o.w)+'"</td><td>'+esc(o.date||'—')+'</td></tr>';
   tb.innerHTML=h+'</tbody>';
   body.insertAdjacentHTML('beforeend','<div class="hint">'+
     (RESULT.logOff
@@ -4928,8 +5038,8 @@ function sheetSVG(panel,board){
       if(pw>44&&ph>26){
         const cx=px+pw/2, cy=py+ph/2;
         const lbl=t==='inventory'?'offcut':'scrap';
-        e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="9" fill="#777" text-anchor="middle" dominant-baseline="central">'+lbl+'</text>';
-        e+='<text x="'+cx.toFixed(1)+'" y="'+(cy+11).toFixed(1)+'" font-size="9" fill="#777" text-anchor="middle" dominant-baseline="central">'+fmt(pl.w)+'&#215;'+fmt(pl.h)+'</text>';
+        e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="10" fill="#777" text-anchor="middle" dominant-baseline="central">'+lbl+'</text>';
+        e+='<text x="'+cx.toFixed(1)+'" y="'+(cy+12).toFixed(1)+'" font-size="10" fill="#777" text-anchor="middle" dominant-baseline="central">'+fmt(pl.w)+'&#215;'+fmt(pl.h)+'</text>';
       }
       continue;
     }
@@ -4937,13 +5047,13 @@ function sheetSVG(panel,board){
       '" fill="'+colorFor(pl.name)+'" stroke="#333" stroke-width="1"/>';
     const cx=px+pw/2, cy=py+ph/2;
     if(pw<56&&ph>pw){
-      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="10" fill="#222" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 '+cx.toFixed(1)+' '+cy.toFixed(1)+')">'+
+      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="11" fill="#222" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 '+cx.toFixed(1)+' '+cy.toFixed(1)+')">'+
         esc(pl.name)+'  '+fmt(pl.w)+'&#215;'+fmt(pl.h)+'</text>';
     }else if(ph<28){
-      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="9.5" fill="#222" text-anchor="middle" dominant-baseline="central">'+
+      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="10.5" fill="#222" text-anchor="middle" dominant-baseline="central">'+
         esc(pl.name)+'  '+fmt(pl.w)+'&#215;'+fmt(pl.h)+'</text>';
     }else{
-      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="11" fill="#222" text-anchor="middle" dominant-baseline="central">'+esc(pl.name)+'</text>';
+      e+='<text x="'+cx.toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="12" fill="#222" text-anchor="middle" dominant-baseline="central">'+esc(pl.name)+'</text>';
       if(pw>48) e+='<text x="'+cx.toFixed(1)+'" y="'+(py+12).toFixed(1)+'" font-size="9.5" fill="#555" text-anchor="middle" dominant-baseline="central">'+fmt(pl.w)+'"</text>';
       if(ph>48) e+='<text x="'+(px+12).toFixed(1)+'" y="'+cy.toFixed(1)+'" font-size="9.5" fill="#555" text-anchor="middle" dominant-baseline="central" transform="rotate(-90 '+(px+12).toFixed(1)+' '+cy.toFixed(1)+')">'+fmt(pl.h)+'"</text>';
     }
@@ -4955,6 +5065,9 @@ function sheetSVG(panel,board){
     /* v2 breakdown settings run to 32nds, so the label shrinks to stay inside the margin. */
     const ct=fmt(cut[0].y)+'"', cfs=Math.min(11,(M-8)/(ct.length*0.6));
     e+='<text x="'+(M-5)+'" y="'+(ly+3).toFixed(1)+'" font-size="'+cfs.toFixed(1)+'" fill="#d33" font-weight="bold" text-anchor="end">'+ct+'</text>';
+    const first=(panel.cutSequence||[]).find(s=>s.initial);
+    if(first) e+='<circle cx="'+(lx+12).toFixed(1)+'" cy="'+(ly-10).toFixed(1)+'" r="9" fill="#d33"/>'+ 
+      '<text x="'+(lx+12).toFixed(1)+'" y="'+(ly-7).toFixed(1)+'" font-size="9" fill="#fff" font-weight="bold" text-anchor="middle">'+first.n+'</text>';
   }
   if(board){
     const x0=M, x1=M+W, y0=TOP, y1=TOP+H, dl=M-13, mid=(y0+y1)/2;
@@ -4994,6 +5107,7 @@ function sheetSVG(panel,board){
   return e+'</svg>';
 }
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const escAttr=s=>esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 
 /* v1.24: the "How parts are figured" card used to carry typed-in numbers that went
    stale the moment a setting changed. Every figure that is a setting is painted here. */
@@ -5322,7 +5436,7 @@ function viewEstimate(body,sum){
     '<div class="estsec"><h3>'+(QUOTE?'Current estimate · time':'Time')+'</h3><div class="tblwrap"><table>'+
     '<thead><tr><th>Task</th><th class="n">Setup</th><th class="n">Each</th><th class="n">Qty</th><th class="n">Hours</th></tr></thead><tbody>';
   for(const r of e.rows)
-    h+='<tr><td>'+r.name+(r.detail?'<br><span style="font-size:10px;color:#7c8894">'+r.detail+'</span>':'')+
+    h+='<tr><td>'+esc(r.name)+(r.detail?'<br><span style="font-size:10px;color:#7c8894">'+esc(r.detail)+'</span>':'')+
        '</td><td class="n">'+r.setup+'m</td><td class="n">'+(r.per?r.per+'m':'—')+
        '</td><td class="n">'+(r.basis==='flat'?'—':(r.basis==='sqft'?r.qty.toFixed(0):r.qty))+
        '</td><td class="n">'+(r.mins/60).toFixed(1)+'</td></tr>';
@@ -5336,14 +5450,14 @@ function viewEstimate(body,sum){
        per-board-foot price keeps its cents. Sheets and sticks read as before. */
     const each=r.unit==='board ft'?'$'+r.price.toFixed(2):$(r.price);
     const qty=r.unit==='board ft'?r.qty+' bf':r.qty+' '+r.unit+(r.qty>1?'s':'');
-    h+='<tr><td>'+r.name+'</td><td class="n">'+qty+'</td><td class="n">'+each+'</td><td class="n">'+$(r.cost)+'</td></tr>';
+    h+='<tr><td>'+esc(r.name)+'</td><td class="n">'+qty+'</td><td class="n">'+each+'</td><td class="n">'+$(r.cost)+'</td></tr>';
   }
   h+='<tr class="grp"><td colspan="3">material subtotal</td><td class="n">'+$(e.matCost)+'</td></tr></tbody></table></div></div>';
 
   h+='<div class="estsec"><h3>Hardware &amp; finish</h3><div class="tblwrap"><table>'+
     '<thead><tr><th>Item</th><th class="n">Qty</th><th class="n">Each</th><th class="n">Cost</th></tr></thead><tbody>';
   for(const r of e.hwRows)
-    h+='<tr><td>'+r.name+'</td><td class="n">'+r.qty+'</td><td class="n">'+$(r.price)+'</td><td class="n">'+$(r.cost)+'</td></tr>';
+    h+='<tr><td>'+esc(r.name)+'</td><td class="n">'+esc(r.qty)+'</td><td class="n">'+$(r.price)+'</td><td class="n">'+$(r.cost)+'</td></tr>';
   h+='<tr class="grp"><td colspan="3">hardware subtotal</td><td class="n">'+$(e.hwCost)+'</td></tr></tbody></table></div></div>';
 
   h+='<div class="estsec"><h3>Price</h3><div class="tblwrap"><table><tbody>';
@@ -5821,7 +5935,7 @@ function frameTable(f){
   let h='<div class="tblwrap"><table><thead><tr><th class="n">Item</th><th>Part</th>'+
     '<th class="n">Qty</th><th class="n">Width</th><th class="n">Length</th></tr></thead><tbody>';
   for(const r of rows)
-    h+='<tr><td class="n">'+r.n+'</td><td>'+r.name+'</td><td class="n">'+r.qty+
+    h+='<tr><td class="n">'+r.n+'</td><td>'+esc(r.name)+'</td><td class="n">'+r.qty+
        '</td><td class="n">'+fmt(r.w)+'"</td><td class="n">'+fmt(r.l)+'"</td></tr>';
   return h+'</tbody></table></div>';
 }
@@ -6138,17 +6252,17 @@ function viewTimer(body,sum){
     const over=act>r.mins&&r.mins>0;
     const t=est.tasks.find(x=>x.name===r.name);
     const ns=t?(t.samples||[]).length:0;
-    h+='<tr><td style="font-size:12.5px">'+r.name+
-      (t?'<br><span class="trainrow"><button class="trainbtn" data-n="'+esc(r.name)+
-         '">train</button>'+(ns?'<button class="untrainbtn" data-n="'+esc(r.name)+'">'+
+    h+='<tr><td style="font-size:12.5px">'+esc(r.name)+
+      (t?'<br><span class="trainrow"><button class="trainbtn" data-n="'+escAttr(r.name)+
+         '">train</button>'+(ns?'<button class="untrainbtn" data-n="'+escAttr(r.name)+'">'+
          ns+' job'+(ns>1?'s':'')+' logged</button>':'')+'</span>':'')+'</td>'+
       '<td class="n" style="color:#7c8894">'+hm(r.mins)+'</td>'+
-      '<td class="n"><input class="tin'+(over?' over':'')+'" data-k="'+k+'" value="'+
+      '<td class="n"><input class="tin'+(over?' over':'')+'" data-k="'+escAttr(k)+'" value="'+
         (act>0?hm(act):'')+'" placeholder="—" inputmode="text"></td>'+
       '<td class="n" style="white-space:nowrap">'+
-        '<button class="tstep" data-k="'+k+'" data-d="-15">&minus;</button>'+
-        '<button class="tbtn'+(on?' on':'')+'" data-k="'+k+'">'+(on?'Stop':'Start')+'</button>'+
-        '<button class="tstep" data-k="'+k+'" data-d="15">+</button>'+
+        '<button class="tstep" data-k="'+escAttr(k)+'" data-d="-15">&minus;</button>'+ 
+        '<button class="tbtn'+(on?' on':'')+'" data-k="'+escAttr(k)+'">'+(on?'Stop':'Start')+'</button>'+ 
+        '<button class="tstep" data-k="'+escAttr(k)+'" data-d="15">+</button>'+ 
       '</td></tr>';
   }
   h+='<tr class="grp"><td>total</td><td class="n">'+hm(estMin)+'</td><td class="n">'+hm(actMin)+'</td><td></td></tr>';
@@ -6283,10 +6397,10 @@ function viewShopping(body,sum){
   let total=0;
   const sect=(title,rows)=>{
     if(!rows.length) return '';
-    let s='<div class="estsec"><h3>'+title+'</h3><div class="tblwrap"><table><tbody>';
+    let s='<div class="estsec"><h3>'+esc(title)+'</h3><div class="tblwrap"><table><tbody>';
     for(const r of rows){
       total+=r.cost||0;
-      s+='<tr><td>'+r.name+'</td><td class="n" style="white-space:nowrap">'+r.qty+'</td>'+
+      s+='<tr><td>'+esc(r.name)+'</td><td class="n" style="white-space:nowrap">'+esc(r.qty)+'</td>'+ 
          '<td class="n">'+(r.cost?$(r.cost):'')+'</td></tr>';
     }
     return s+'</tbody></table></div></div>';
@@ -6410,6 +6524,7 @@ function projOpen(name){
 let printPick=null;
 async function printMenu(){
   if(!RESULT) return toast('Build the cut list first.');
+  if(!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
   const tabs=tabDefs().filter(t=>t.id!=='timer');
   const valid=new Set(tabs.map(t=>t.id));
   const pick=new Set((printPick||[]).filter(id=>valid.has(id)));
@@ -6446,9 +6561,10 @@ async function printMenu(){
 }
 function printPack(only){
   if(!RESULT) return toast('Build the cut list first.');
+  if(!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
   const host=document.getElementById('printPack');
   const keep=VIEW;
-  let h='<h1 style="font-size:18px;margin:0 0 4px">'+(localStorage.getItem('bbcab_current')||'Cabinet job')+'</h1>'+
+  let h='<h1 style="font-size:18px;margin:0 0 4px">'+esc(localStorage.getItem('bbcab_current')||'Cabinet job')+'</h1>'+ 
     '<div style="font-size:11px;color:#4a5560;margin-bottom:14px">Bluebird Woodworking · '+
     new Date().toLocaleDateString()+'</div>';
   const tmpBody=document.createElement('div'), tmpSum=document.createElement('div');
@@ -6471,7 +6587,7 @@ function printPack(only){
       else if(t.id.indexOf('dwg:')===0) viewBuild(tmpBody,tmpSum,t.id.slice(4));
       else viewCutGroup(tmpBody,tmpSum,RESULT.groups[+t.id.split(':')[1]]);
     }catch(e){ continue; }
-    h+='<section class="pp"><h2>'+t.label+'</h2>'+
+    h+='<section class="pp"><h2>'+esc(t.label)+'</h2>'+ 
        '<div class="summary">'+tmpSum.innerHTML+'</div>'+tmpBody.innerHTML+'</section>';
   }
   VIEW=keep;
@@ -6498,6 +6614,7 @@ function isStandalone(){
   return false;
 }
 async function tryPrint(explicit){
+  if(RESULT&&!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
   if(isStandalone()){
     if(!explicit) return toast('Installed apps can\u2019t print on iPhone \u2014 use Save file, or tap Print for the options.');
     const v=await uiMenu('No printer here',
@@ -7154,6 +7271,9 @@ function matForm(existing){
       const L=lum?96:parseFrac(li.value), W=lum?8:parseFrac(wi.value);
       if(!lum&&[L,W].some(v=>v===null||isNaN(v)||v<=0))
         return toast('Length and width both need a positive number.');
+      const sk=parseFrac(document.getElementById('kerf')?.value||'1/8');
+      if(sel.value==='sheet'&&(L<72+sk-EPS||L>120+sk+EPS))
+        return toast('Sheet length must let the first cut leave two sections between 36" and 60". With this kerf, use 72 1/8" through 120 1/8".');
       c({name:n,kind:sel.value,l:L,w:W,t:T});
     }}]);
     setTimeout(()=>{ if(!inp.disabled) inp.focus(); },60);
@@ -7298,6 +7418,8 @@ document.getElementById('resBody').addEventListener('click',e=>{
   if(sb.dataset.s==='go') keepSearching();
   else if(sb.dataset.s==='stop'){ stopSearch(); SEARCH.msg='Stopped. Anything better it found is kept.'; paintSearch(); }
   else if(sb.dataset.s==='reset'){ JOB_NEST_BEST={}; SEARCH.msg=''; build({quiet:true}); }
+  else if(sb.dataset.s==='accept') acceptSearchOffer();
+  else if(sb.dataset.s==='reject') rejectSearchOffer();
 });
 document.getElementById('btnBack').onclick=()=>{
   stopSearch();
@@ -7537,6 +7659,7 @@ function save(){
     view:VIEW,
     drawer_phase:document.getElementById('drawer_phase').value,
     door_phase:document.getElementById('door_phase').value,
+    opt_mode:document.getElementById('opt_mode').value,
     include:JSON.parse(JSON.stringify(include)),
     mats:JOB_MATS, matPin:JOB_MAT_PIN, quote:QUOTE, nestBest:JOB_NEST_BEST,
     est:JSON.parse(JSON.stringify(est)),
@@ -7581,6 +7704,7 @@ function load(){
   if(d.built){ pendingBuild=true; pendingView=d.view||'layout'; }
   if(d.drawer_phase) document.getElementById('drawer_phase').value=d.drawer_phase;
   if(d.door_phase) document.getElementById('door_phase').value=d.door_phase;
+  if(['balanced','fast','scrap','offcuts'].includes(d.opt_mode)) document.getElementById('opt_mode').value=d.opt_mode;
   if(d.include) for(const r of RUNS) Object.assign(include[r],d.include[r]||{});
   const asObj=o=>o&&typeof o==='object'&&!Array.isArray(o)?o:{};
   JOB_MATS=asObj(d.mats); JOB_MAT_PIN=asObj(d.matPin);
