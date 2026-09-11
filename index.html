@@ -301,12 +301,6 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .searchcompare b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-2)}
 .fatalwarn{background:#8b1e22;color:#fff;border-radius:10px;padding:13px 14px;margin-bottom:12px;line-height:1.45}
 .fatalwarn b{display:block;font-size:17px;margin-bottom:3px}
-.cutplan{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:7px;background:#fff;font-size:12px}
-.cutplan summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--blue-deep);font-weight:700}
-.cutplan[open] summary{margin-bottom:7px}
-.fencerun{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-weight:700;color:var(--blue-deep)}
-.cutstep{display:grid;grid-template-columns:28px 1fr;gap:6px;padding:3px 0;line-height:1.35}
-.cutstep b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px}
 .sbar{height:5px;border-radius:3px;background:var(--sky);margin-top:8px;overflow:hidden}
 .sbar i{display:block;height:100%;background:var(--blue);transition:width .3s}
 .warnbtn{display:inline-block;margin-top:6px;padding:5px 10px;font-size:12px;border-radius:7px;
@@ -440,7 +434,6 @@ body.printing #printPack{display:block}
   .stickwrap svg{width:100%;height:auto}
   .pp{page-break-inside:auto}
   thead{display:table-header-group}
-  .cutplan>div{display:block!important}
 }
 .printonly{display:none}
 .printbar{display:none}
@@ -454,7 +447,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.29</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.30</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -2191,12 +2184,8 @@ const CUTOPT=(()=>{
       return out;
     });
     const longNames = [...new Set(v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.name))];
-    const sequences=c.sheets.map(sheet=>c.schedule.filter(x=>x.sheet===sheet.index).map((x,i)=>({
-      n:i+1, setting:r4(x.setting), axis:x.axis,
-      breakdown:x.label==='Required sheet breakdown', label:x.label||'Cut'
-    })));
     return {
-      sheets, sequences, label: pick.label, longNames,
+      sheets, label: pick.label, longNames,
       /* [index] How Keep searching compares two layouts for the same parts: fewer sheets,
          then the engine's own balanced score (lower is better). */
       score: {sheets: c.sheets.length, raw: objectiveRaw(c), cuts:c.cutCount,
@@ -2453,10 +2442,10 @@ function packMaterial(material,matParts,stockOffcuts){
       remaining=remaining.filter(p=>!done.has(p.id));
     }
   }
-  let sheets=[],sequences=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
+  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
   if(remaining.length){
     const res=nestFor(remaining,cutTrials(remaining.length));
-    ({sheets,sequences=[],metrics,openSheets,longNames}=res);
+    ({sheets,metrics,openSheets,longNames}=res);
     strategy=res.label;
     for(const sh of sheets) for(const p of sh)
       if(p.kind==='offcut'&&p.tier==='inventory')
@@ -2467,15 +2456,14 @@ function packMaterial(material,matParts,stockOffcuts){
   const sheetKey=sh=>sh.map(p=>[p.kind,p.name,Math.round(p.x*64),Math.round(p.y*64),
     Math.round(p.w*64),Math.round(p.h*64)].join(',')).sort().join(';');
   const alike=[];
-  for(let si=0;si<sheets.length;si++){
-    const sh=sheets[si];
+  for(const sh of sheets){
     const key=sheetKey(sh), same=alike.find(a=>a.key===key);
-    if(same) same.runs++; else alike.push({key,sh,seq:sequences[si]||[],runs:1});
+    if(same) same.runs++; else alike.push({key,sh,runs:1});
   }
   let upTo=0;
   const panels=alike.map(a=>{
     const from=upTo+1; upTo+=a.runs;
-    return {placements:a.sh,cutSequence:a.seq,w:SHEET_W,l:SHEET_L,runs:a.runs,
+    return {placements:a.sh,w:SHEET_W,l:SHEET_L,runs:a.runs,
       label:a.runs>1?`Sheets ${from}\u2013${upTo}/${sheets.length} \u00b7 run this layout \u00d7${a.runs}`:`Sheet ${from}/${sheets.length}`};
   }).concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
   return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,unplaced,
@@ -4881,20 +4869,6 @@ function stickSVG(st,cfg){
   return e+'</svg>';
 }
 
-function cutSequenceHTML(panel){
-  const seq=panel.cutSequence||[];
-  if(!seq.length) return '';
-  let h='<details class="cutplan"><summary>Cut sequence · '+seq.length+' steps</summary><div>', last=null;
-  for(const s of seq){
-    const setting=fmt(s.setting)+'"';
-    const operation=s.breakdown?'Break down at ':s.axis==='horizontal'?'Crosscut at ':'Set rip fence to ';
-    const run=operation+setting;
-    if(run!==last){ h+='<div class="fencerun">'+run+'</div>'; last=run; }
-    h+='<div class="cutstep"><b>'+s.n+'</b><span>'+esc(s.label)+(s.breakdown?' — required breakdown':'')+'</span></div>';
-  }
-  return h+'</div></details>';
-}
-
 function viewMap(body,sum,g){
   const cfg=RESULT.cfg;
   const N=g.nest;
@@ -4922,7 +4896,7 @@ function viewMap(body,sum,g){
       h+='<h3 style="font-size:14px;margin:14px 0 8px">'+esc(m.material)+' — '+m.sheets+' sheet(s) '+size+
         (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</h3>';
       for(const p of m.panels)
-        h+='<div class="sheetwrap sheetpanel"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p)+cutSequenceHTML(p)+'</div>';
+        h+='<div class="sheetwrap sheetpanel"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p)+'</div>';
     }
   }
   if(g.boards&&g.boards.panels.length){
@@ -5070,9 +5044,6 @@ function sheetSVG(panel,board){
     /* v2 breakdown settings run to 32nds, so the label shrinks to stay inside the margin. */
     const ct=fmt(cut[0].y)+'"', cfs=Math.min(11,(M-8)/(ct.length*0.6));
     e+='<text x="'+(M-5)+'" y="'+(ly+3).toFixed(1)+'" font-size="'+cfs.toFixed(1)+'" fill="#d33" font-weight="bold" text-anchor="end">'+ct+'</text>';
-    const first=(panel.cutSequence||[]).find(s=>s.breakdown);
-    if(first) e+='<circle cx="'+(lx+12).toFixed(1)+'" cy="'+(ly-10).toFixed(1)+'" r="9" fill="#d33"/>'+ 
-      '<text x="'+(lx+12).toFixed(1)+'" y="'+(ly-7).toFixed(1)+'" font-size="9" fill="#fff" font-weight="bold" text-anchor="middle">'+first.n+'</text>';
   }
   if(board){
     const x0=M, x1=M+W, y0=TOP, y1=TOP+H, dl=M-13, mid=(y0+y1)/2;
