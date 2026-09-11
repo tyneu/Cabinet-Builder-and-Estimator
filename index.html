@@ -271,8 +271,8 @@ button{font:inherit;font-weight:650;border-radius:8px;border:1px solid transpare
 .sec.sel{background:var(--blue-deep);color:#fff}
 .subtabs{display:flex;gap:5px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .subtabs .tab{flex:0 0 auto;min-width:0;padding:7px 12px}
-table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
-th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-2);
   border-bottom:2px solid var(--ink);padding:6px 5px}
 td{padding:6px 5px;border-bottom:1px solid var(--line)}
 td.n,th.n{text-align:right}
@@ -302,7 +302,8 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .fatalwarn{background:#8b1e22;color:#fff;border-radius:10px;padding:13px 14px;margin-bottom:12px;line-height:1.45}
 .fatalwarn b{display:block;font-size:17px;margin-bottom:3px}
 .cutplan{border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-top:7px;background:#fff;font-size:12px}
-.cutplan h4{margin:0 0 7px;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--blue-deep)}
+.cutplan summary{cursor:pointer;font-size:12px;text-transform:uppercase;letter-spacing:.09em;color:var(--blue-deep);font-weight:700}
+.cutplan[open] summary{margin-bottom:7px}
 .fencerun{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-weight:700;color:var(--blue-deep)}
 .cutstep{display:grid;grid-template-columns:28px 1fr;gap:6px;padding:3px 0;line-height:1.35}
 .cutstep b{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--blue);color:#fff;font-size:11px}
@@ -439,6 +440,7 @@ body.printing #printPack{display:block}
   .stickwrap svg{width:100%;height:auto}
   .pp{page-break-inside:auto}
   thead{display:table-header-group}
+  .cutplan>div{display:block!important}
 }
 .printonly{display:none}
 .printbar{display:none}
@@ -452,7 +454,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.28</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.29</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -1265,8 +1267,7 @@ const CUTOPT=(()=>{
     });
     stacks.forEach(a => stacks.forEach(b => add(a + KERF + b)));
     return [...values]
-      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS &&
-        SHEET_L - v - KERF >= FIRST_MIN - EPS && SHEET_L - v - KERF <= FIRST_MAX + EPS)
+      .filter(v => v >= FIRST_MIN - EPS && v <= FIRST_MAX + EPS && SHEET_L - v - KERF > EPS)
       .sort((a, b) => a - b);
   }
 
@@ -2191,7 +2192,8 @@ const CUTOPT=(()=>{
     });
     const longNames = [...new Set(v2parts.filter(p => p.h > halfMax() + EPS).map(p => p.name))];
     const sequences=c.sheets.map(sheet=>c.schedule.filter(x=>x.sheet===sheet.index).map((x,i)=>({
-      n:i+1, setting:r4(x.setting), axis:x.axis, initial:!!x.initial, label:x.label||'Cut'
+      n:i+1, setting:r4(x.setting), axis:x.axis,
+      breakdown:x.label==='Required sheet breakdown', label:x.label||'Cut'
     })));
     return {
       sheets, sequences, label: pick.label, longNames,
@@ -2219,7 +2221,7 @@ const CUTOPT=(()=>{
    layout in hand. No worker (blocked, or an old browser) means the search runs in the
    page exactly as it always did. */
 const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
-const NEST_CACHE_VERSION='1.28';
+const NEST_CACHE_VERSION='1.29';
 const NEST_MEMO=new Map();                 // this session: signature -> engine result
 let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
 let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
@@ -4318,8 +4320,8 @@ function build(opts){
   const errs=[], runs={}, warns=[];
   const pinned=matsInUse().filter(n=>JOB_MAT_PIN[n]);
   if(pinned.length)
-    warns.push('Built on this job\'s own sizes for '+esc(pinned.map(n=>n+' ('+matSpecTxt(shopSpec(n)||JOB_MAT_PIN[n],{kind:(shopSpec(n)||{}).kind,...JOB_MAT_PIN[n]}).replace(/ → /g,' in the shop list, job keeps ')+')').join('; '))+
-      '. <button type="button" class="warnbtn" data-act="mat-shop">Use shop sizes</button>');
+    warns.push('Built on this job\'s own sizes for '+pinned.map(n=>n+' ('+matSpecTxt(shopSpec(n)||JOB_MAT_PIN[n],{kind:(shopSpec(n)||{}).kind,...JOB_MAT_PIN[n]}).replace(/ → /g,' in the shop list, job keeps ')+')').join('; ')+
+      '. [[USE_SHOP_SIZES]]');
   /* A material this job names is no longer on the list. It has been substituted so the
      job still builds, but the parts are a different thickness than they were. */
   const swaps=MAT_SWAPS.splice(0);
@@ -4634,8 +4636,8 @@ function runNesting(parts,cfg,stock){
     const md=matOf(m);
     SHEET_L=md&&md.l>0?md.l:96;
     SHEET_W=md&&md.w>0?md.w:48;
-    if(matKind(m)==='sheet'&&(SHEET_L<72+KERF-EPS||SHEET_L>120+KERF+EPS))
-      throw new Error(m+' has an invalid sheet length. The required first cut must leave two sections between 36" and 60".');
+    if(matKind(m)==='sheet'&&SHEET_L<=36+KERF+EPS)
+      throw new Error(m+' is too short for a first cut 36" from the end plus the saw kerf.');
     out.push(packMaterial(m,mine,stock));
   }
   SHEET_L=96; SHEET_W=48;
@@ -4712,8 +4714,10 @@ function render(){
   const sum=document.getElementById('resSummary');
   const body=document.getElementById('resBody');
   const warnBox=document.getElementById('resWarn');
-  warnBox.innerHTML=(RESULT.complete?'':'<div class="fatalwarn"><b>INCOMPLETE — DO NOT CUT</b>Required pieces are missing. Fix the entries or material sizes and rebuild before using this plan.</div>')+
-    RESULT.warns.map(w=>'<div class="warn">'+esc(w)+'</div>').join('');
+  const warningHTML=w=>esc(w).replace('[[USE_SHOP_SIZES]]','<button type="button" class="warnbtn" data-act="mat-shop">Use shop sizes</button>');
+  const visibleWarns=RESULT.warns.filter(w=>RESULT.complete||!/^This result is incomplete:/.test(w));
+  warnBox.innerHTML=(RESULT.complete?'':'<div class="fatalwarn"><b>INCOMPLETE — DO NOT CUT</b>Required pieces are missing. Fix the entries or material sizes and rebuild before using the cut maps.</div>')+
+    visibleWarns.map(w=>'<div class="warn">'+warningHTML(w)+'</div>').join('');
   body.innerHTML='<div class="tblwrap"><table id="resTable"></table></div>';
   const tb=document.getElementById('resTable');
   const title=tabDefs().find(t=>t.id===VIEW).label;
@@ -4831,7 +4835,7 @@ function viewCut(tb,sum,g){
   if(g.sheetParts.length)
     for(const e of merged(g.sheetParts)) h+=row(e,e.mat);
   if(g.linearParts.length){
-    h+='<tr class="grp"><td colspan="6">'+stickMat()+'</td></tr>';
+    h+='<tr class="grp"><td colspan="6">'+esc(stickMat())+'</td></tr>';
     for(const e of merged(g.linearParts)) h+=row(e,e.mat);
     const byW={};
     for(const p of g.linearParts){ const k=r4(p.W); byW[k]=(byW[k]||0)+p.L*p.qty; }
@@ -4880,33 +4884,34 @@ function stickSVG(st,cfg){
 function cutSequenceHTML(panel){
   const seq=panel.cutSequence||[];
   if(!seq.length) return '';
-  let h='<div class="cutplan"><h4>Cut &amp; fence sequence</h4>', last=null;
+  let h='<details class="cutplan"><summary>Cut sequence · '+seq.length+' steps</summary><div>', last=null;
   for(const s of seq){
     const setting=fmt(s.setting)+'"';
-    if(setting!==last){ h+='<div class="fencerun">Set fence to '+setting+'</div>'; last=setting; }
-    h+='<div class="cutstep"><b>'+s.n+'</b><span>'+esc(s.label)+(s.initial?' — required breakdown':'')+'</span></div>';
+    const operation=s.breakdown?'Break down at ':s.axis==='horizontal'?'Crosscut at ':'Set rip fence to ';
+    const run=operation+setting;
+    if(run!==last){ h+='<div class="fencerun">'+run+'</div>'; last=run; }
+    h+='<div class="cutstep"><b>'+s.n+'</b><span>'+esc(s.label)+(s.breakdown?' — required breakdown':'')+'</span></div>';
   }
-  return h+'</div>';
+  return h+'</div></details>';
 }
 
 function viewMap(body,sum,g){
   const cfg=RESULT.cfg;
   const N=g.nest;
   sum.innerHTML=(N?'<div>Sheets<b>'+N.sheets+'</b></div><div>Saw passes<b>'+N.cuts+'</b></div>'+ 
-      '<div>Fence changes<b>'+N.fenceChanges+'</b></div><div>Scrap<b>'+(N.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
-      '<div>Inventory offcuts used<b>'+N.offcutsUsed+'</b></div><div>Reusable offcuts created<b>'+N.banked.length+'</b></div>':'')+
+      '<div>Fence changes<b>'+N.fenceChanges+'</b></div><div>Sheet scrap<b>'+(N.scrapArea/144).toFixed(1)+' sq ft</b></div>':'')+
     (g.sticks?'<div>Sticks of '+fmt(cfg.stock_length/12)+' ft<b>'+g.sticks.length+'</b></div>':'')+
     (g.boards&&g.boards.panels.length
       ?'<div>Boards used<b>'+g.boards.boardsUsed+'</b></div>'+
-       '<div>Scrap<b>'+(g.boards.scrapArea/144).toFixed(1)+' sq ft</b></div>'+
+       '<div>Board scrap<b>'+(g.boards.scrapArea/144).toFixed(1)+' sq ft</b></div>'+ 
        (g.boards.unplaced.length?'<div>Not placed<b>'+g.boards.unplaced.length+'</b></div>':'')
       :'');
   let h='';
   if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   if(N&&N.materials.length){
-    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Inventory offcuts used</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
+    h+='<div class="tblwrap"><table><thead><tr><th>Material</th><th class="n">Sheets</th><th class="n">Offcuts used / reusable</th><th class="n">Saw passes / fence changes</th><th>Layout</th></tr></thead><tbody>';
     for(const m of N.materials)
-      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+
+      h+='<tr><td>'+esc(m.material)+'</td><td class="n">'+m.sheets+'</td><td class="n">'+m.offcutsUsed+' / '+m.newOffcuts.length+
         '</td><td class="n">'+(m.metrics?m.metrics.cuts+' / '+m.metrics.fenceChanges:'—')+'</td><td style="font-size:12px">'+esc(m.strategy||'—')+'</td></tr>';
     h+='</tbody></table></div>';
     h+='<div class="legend" style="margin-top:14px"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>offcut, keep &amp; log</span>'+
@@ -4942,7 +4947,7 @@ function viewMap(body,sum,g){
     if(B.panels.length) h+='</div>';
   }
   if(g.sticks&&g.sticks.length){
-    h+='<h3 style="font-size:13px;margin:18px 0 6px">'+stickMat()+' — '+g.sticks.length+
+    h+='<h3 style="font-size:13px;margin:18px 0 6px">'+esc(stickMat())+' — '+g.sticks.length+
       ' stick(s) at '+fmt(cfg.stock_length)+'"</h3>'+
       '<div class="legend"><span><i style="background:#dcedc8;border-color:#8bb99a"></i>rip waste, cut off the side</span>'+
       '<span><i style="background:#ececec;border-color:#b0b0b0"></i>drop</span></div>';
@@ -5065,7 +5070,7 @@ function sheetSVG(panel,board){
     /* v2 breakdown settings run to 32nds, so the label shrinks to stay inside the margin. */
     const ct=fmt(cut[0].y)+'"', cfs=Math.min(11,(M-8)/(ct.length*0.6));
     e+='<text x="'+(M-5)+'" y="'+(ly+3).toFixed(1)+'" font-size="'+cfs.toFixed(1)+'" fill="#d33" font-weight="bold" text-anchor="end">'+ct+'</text>';
-    const first=(panel.cutSequence||[]).find(s=>s.initial);
+    const first=(panel.cutSequence||[]).find(s=>s.breakdown);
     if(first) e+='<circle cx="'+(lx+12).toFixed(1)+'" cy="'+(ly-10).toFixed(1)+'" r="9" fill="#d33"/>'+ 
       '<text x="'+(lx+12).toFixed(1)+'" y="'+(ly-7).toFixed(1)+'" font-size="9" fill="#fff" font-weight="bold" text-anchor="middle">'+first.n+'</text>';
   }
@@ -6524,13 +6529,15 @@ function projOpen(name){
 let printPick=null;
 async function printMenu(){
   if(!RESULT) return toast('Build the cut list first.');
-  if(!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
-  const tabs=tabDefs().filter(t=>t.id!=='timer');
+  const blocked=!RESULT.complete;
+  const tabs=tabDefs().filter(t=>t.id!=='timer'&&(!blocked||!/^cut:/.test(t.id)));
   const valid=new Set(tabs.map(t=>t.id));
   const pick=new Set((printPick||[]).filter(id=>valid.has(id)));
   if(!pick.size) for(const t of tabs) pick.add(t.id);
   const chosen=await uiSheet((box,close)=>{
-    sheetHead(box,'Print','Tick what you want in the pack.');
+    sheetHead(box,'Print',blocked
+      ?'This result is incomplete. Cut-map tabs are excluded, but preliminary estimates and drawings can still be printed.'
+      :'Tick what you want in the pack.');
     const row=document.createElement('div');
     row.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px';
     const paint=()=>[...row.children].forEach(c=>c.classList.toggle('on',pick.has(c.dataset.id)));
@@ -6561,7 +6568,6 @@ async function printMenu(){
 }
 function printPack(only){
   if(!RESULT) return toast('Build the cut list first.');
-  if(!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
   const host=document.getElementById('printPack');
   const keep=VIEW;
   let h='<h1 style="font-size:18px;margin:0 0 4px">'+esc(localStorage.getItem('bbcab_current')||'Cabinet job')+'</h1>'+ 
@@ -6614,7 +6620,6 @@ function isStandalone(){
   return false;
 }
 async function tryPrint(explicit){
-  if(RESULT&&!RESULT.complete) return toast('This result is incomplete. Fix it and rebuild before printing.');
   if(isStandalone()){
     if(!explicit) return toast('Installed apps can\u2019t print on iPhone \u2014 use Save file, or tap Print for the options.');
     const v=await uiMenu('No printer here',
@@ -6849,7 +6854,7 @@ function renderHome(){
   const byMat={};
   for(const o of rack) byMat[o.material]=(byMat[o.material]||0)+1;
   document.getElementById('homeRack').innerHTML=rack.length
-    ? '<div>Pieces<b>'+rack.length+'</b></div>'+Object.keys(byMat).map(k=>'<div>'+k+'<b>'+byMat[k]+'</b></div>').join('')
+    ? '<div>Pieces<b>'+rack.length+'</b></div>'+Object.keys(byMat).map(k=>'<div>'+esc(k)+'<b>'+byMat[k]+'</b></div>').join('')
     : '<div class="hint" style="margin:0">Rack is empty.</div>';
 }
 function homeInit(){
@@ -7272,8 +7277,8 @@ function matForm(existing){
       if(!lum&&[L,W].some(v=>v===null||isNaN(v)||v<=0))
         return toast('Length and width both need a positive number.');
       const sk=parseFrac(document.getElementById('kerf')?.value||'1/8');
-      if(sel.value==='sheet'&&(L<72+sk-EPS||L>120+sk+EPS))
-        return toast('Sheet length must let the first cut leave two sections between 36" and 60". With this kerf, use 72 1/8" through 120 1/8".');
+      if(sel.value==='sheet'&&L<=36+sk+EPS)
+        return toast('Sheet length must be greater than 36" plus the saw kerf so the required first cut leaves wood on both sides.');
       c({name:n,kind:sel.value,l:L,w:W,t:T});
     }}]);
     setTimeout(()=>{ if(!inp.disabled) inp.focus(); },60);
