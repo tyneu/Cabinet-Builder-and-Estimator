@@ -22,10 +22,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,san
 h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
 .wrap{max-width:860px;margin:0 auto;padding:0 12px 120px}
 header{position:sticky;top:0;z-index:40;background:var(--blue-deep);color:#fff;
-  margin:0 -12px 14px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;
-  display:flex;align-items:baseline;gap:10px;box-shadow:0 2px 10px rgba(0,0,0,.18);}
-header h1{font-size:17px;letter-spacing:.02em}
-header .sub{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:#9fc4dc}
+  margin:0 0 14px;padding:calc(10px + env(safe-area-inset-top)) 16px 10px;   /* v1.26: was -12px sides, meant for inside .wrap; the header sits outside it, so the page scrolled sideways */
+  display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px;box-shadow:0 2px 10px rgba(0,0,0,.18);}
+header h1{font-size:17px;letter-spacing:.02em;white-space:nowrap}
+header .sub{font-size:11px;text-transform:uppercase;letter-spacing:.14em;color:#9fc4dc;white-space:nowrap}
 header .ver{font-size:11px;font-weight:600;letter-spacing:.04em;color:#9fc4dc;opacity:.8}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:14px;box-shadow:var(--shadow)}
 .card>h2{font-size:12px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-2);margin-bottom:10px}
@@ -293,6 +293,7 @@ tbody tr.grp td{background:var(--sky);font-weight:700;font-size:11px;text-transf
 .quotebox .tblwrap{margin-top:8px}
 .qbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 #printPack .qbtns,#printPack .searchbar{display:none}
+.cutlisthead{font-size:13px;margin:18px 0 8px;padding-top:14px;border-top:1px solid var(--line)}
 .searchbar{border:1px solid var(--line-hard);border-radius:10px;padding:10px 12px;margin:0 0 12px;background:#fff}
 .searchbar .stext{font-size:13px;line-height:1.45}
 .sbar{height:5px;border-radius:3px;background:var(--sky);margin-top:8px;overflow:hidden}
@@ -441,7 +442,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.25</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.26</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -4553,11 +4554,9 @@ function runNesting(parts,cfg,stock){
 function tabDefs(){
   const t=[{id:'layout',label:'Layout'}];
   const multi=RESULT.groups.length>1;
-  RESULT.groups.forEach((g,i)=>{
-    t.push({id:'cut:'+i,label:multi?g.label:'Cut list'});
-    if(include.out.cutmap&&(g.nest||g.sticks||g.boards?.panels.length))
-      t.push({id:'map:'+i,label:multi?g.label+' map':'Cut map'});
-  });
+  /* v1.26: one tab per group, with its cut map on top and its cut list underneath
+     (viewCutGroup). A view saved as 'map:' by v1.25 opens the same tab. */
+  RESULT.groups.forEach((g,i)=>t.push({id:'cut:'+i,label:multi?g.label:'Cut list'}));
   if(include.out.drawings){
     for(const r of RUNS)
       if(RESULT.runs[r]?.cabs.length) t.push({id:'dwg:'+r,label:(r==='upper'?'Upper':'Lower')+' build'});
@@ -4575,7 +4574,7 @@ function tabDefs(){
    sections, with the sections' own tabs beneath. The tab ids are unchanged, so print,
    saved views and everything else that names a tab carry on as before. */
 const TAB_SECTIONS=[['plan','Plan'],['cut','Cut'],['build','Build'],['money','Money']];
-const tabSection=id=>id==='layout'?'plan':(/^(cut|map):/.test(id)||id==='off')?'cut':/^dwg/.test(id)?'build':'money';
+const tabSection=id=>id==='layout'?'plan':(/^cut:/.test(id)||id==='off')?'cut':/^dwg/.test(id)?'build':'money';
 const LAST_SUB={};
 function renderTabs(){
   const bar=document.getElementById('tabs');
@@ -4607,6 +4606,7 @@ function renderTabs(){
 }
 function render(){
   if(!RESULT) return;
+  if(/^map:/.test(VIEW)) VIEW='cut:'+VIEW.slice(4);
   if(!tabDefs().some(t=>t.id===VIEW)) VIEW='layout';
   renderTabs();
   const on=(VIEW==='est'||VIEW==='timer')?'':'none';
@@ -4631,9 +4631,36 @@ function render(){
   if(VIEW==='dwgdrw')  return viewDrawers(body,sum);
   if(VIEW.indexOf('dwg:')===0) return viewBuild(body,sum,VIEW.slice(4));
   if(VIEW==='off')    return viewOffcuts(tb,sum,body);
-  const [kind,gi]=VIEW.split(':');
-  const g=RESULT.groups[+gi];
-  return kind==='cut'?viewCut(tb,sum,g):viewMap(body,sum,g);
+  return viewCutGroup(body,sum,RESULT.groups[+VIEW.split(':')[1]]);
+}
+/* A group's cut map (sheets, boards, sticks) sits on top and its cut list under it.
+   Both views are drawn as before into their own holders; the summary keeps one of
+   each figure, taking the map's wording where both report the same thing. */
+function viewCutGroup(body,sum,g){
+  const hasMap=include.out.cutmap&&(g.nest||g.sticks||g.boards?.panels.length);
+  const tb=document.createElement('table'), listSum=document.createElement('div');
+  viewCut(tb,listSum,g);
+  body.innerHTML='';
+  let mapSum=null;
+  if(hasMap){
+    const mapBody=document.createElement('div'); mapSum=document.createElement('div');
+    viewMap(mapBody,mapSum,g);
+    mapBody.className='cutmapblock';
+    const hd=document.createElement('h3'); hd.className='cutlisthead'; hd.textContent='Cut list';
+    body.append(mapBody,hd);
+  }
+  const wrap=document.createElement('div'); wrap.className='tblwrap'; wrap.append(tb);
+  body.append(wrap);
+  const labelOf=d=>(d.firstChild&&d.firstChild.nodeType===3?d.firstChild.textContent:d.textContent).trim();
+  const items=[...listSum.children];
+  for(const d of (mapSum?[...mapSum.children]:[])){
+    const l=labelOf(d);
+    if(items.some(x=>labelOf(x)===l)) continue;
+    if(/^Sticks of /.test(l)){ const i=items.findIndex(x=>labelOf(x)==='Sticks'); if(i>=0){ items[i]=d; continue; } }
+    items.push(d);
+  }
+  sum.innerHTML='';
+  sum.append(...items);
 }
 
 function viewLayout(tb,sum){
@@ -6433,10 +6460,7 @@ function printPack(only){
       else if(t.id==='dwgdoor') viewDoors(tmpBody,tmpSum);
       else if(t.id==='dwgdrw') viewDrawers(tmpBody,tmpSum);
       else if(t.id.indexOf('dwg:')===0) viewBuild(tmpBody,tmpSum,t.id.slice(4));
-      else{
-        const [kind,gi]=t.id.split(':'), g=RESULT.groups[+gi];
-        if(kind==='cut') viewCut(tbl,tmpSum,g); else viewMap(tmpBody,tmpSum,g);
-      }
+      else viewCutGroup(tmpBody,tmpSum,RESULT.groups[+t.id.split(':')[1]]);
     }catch(e){ continue; }
     h+='<section class="pp"><h2>'+t.label+'</h2>'+
        '<div class="summary">'+tmpSum.innerHTML+'</div>'+tmpBody.innerHTML+'</section>';
