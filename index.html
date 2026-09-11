@@ -447,7 +447,7 @@ body.printing .wrap{padding-bottom:120px}
 </head>
 <body>
 <!-- Version: bump on every change that ships. Renumbered to v1.24 at the data-safety release. -->
-<header><h1>Cabinet Planner</h1><span class="ver">v1.31</span><span class="sub">Bluebird Woodworking</span></header>
+<header><h1>Cabinet Planner</h1><span class="ver">v1.32</span><span class="sub">Bluebird Woodworking</span></header>
 <div class="wrap">
 
 <div id="home">
@@ -2210,7 +2210,7 @@ const CUTOPT=(()=>{
    layout in hand. No worker (blocked, or an old browser) means the search runs in the
    page exactly as it always did. */
 const NEST_PENDING={nestPending:true}, NEST_STOPPED={nestStopped:true};
-const NEST_CACHE_VERSION='1.31';
+const NEST_CACHE_VERSION='1.32';
 const NEST_MEMO=new Map();                 // this session: signature -> engine result
 let JOB_NEST_BEST={};                      // saved with the job: Keep searching layouts that beat the standard one
 let NEST_USED=null, LAST_NEST_REQS=null;   // what the pass in progress / the last build asked for
@@ -2220,11 +2220,11 @@ function nestHash(str){
   return (a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');
 }
 /* Everything the engine reads: the parts, the trial count, the kerf and the sheet. */
-function nestReq(parts,trials){
+function nestReq(parts,trials,material){
   const ps=parts.map(p=>({id:p.id,L:p.L,S:p.S,name:p.name}));
   const mode=document.getElementById('opt_mode')?.value||'balanced';
-  const sig=nestHash(JSON.stringify([NEST_CACHE_VERSION,mode,KERF,SHEET_W,SHEET_L,trials,ps.map(p=>[p.id,p.name,r4(p.L),r4(p.S)])]));
-  return {sig,parts:ps,trials,kerf:KERF,W:SHEET_W,L:SHEET_L,mode};
+  const sig=nestHash(JSON.stringify([NEST_CACHE_VERSION,material||'',mode,KERF,SHEET_W,SHEET_L,trials,ps.map(p=>[p.id,p.name,r4(p.L),r4(p.S)])]));
+  return {sig,material:material||'',parts:ps,trials,kerf:KERF,W:SHEET_W,L:SHEET_L,mode};
 }
 const nestClone=o=>JSON.parse(JSON.stringify(o));
 function validNestResult(res,req){
@@ -2257,8 +2257,8 @@ function nestRemember(sig,res){
   NEST_MEMO.delete(sig); NEST_MEMO.set(sig,res);
   while(NEST_MEMO.size>40) NEST_MEMO.delete(NEST_MEMO.keys().next().value);
 }
-function nestFor(parts,trials){
-  const req=nestReq(parts,trials);
+function nestFor(parts,trials,material){
+  const req=nestReq(parts,trials,material);
   if(NEST_USED) NEST_USED.set(req.sig,req);
   let hit=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
   if(hit&&!hit.error&&!validNestResult(hit,req)){
@@ -2316,110 +2316,98 @@ const NESTER={
 };
 let BUILD_SEQ=0, BUILD_PENDING=false;
 
-/* ================= keep searching (v1.25) =================
-   The standard search is a fixed seed and a fixed number of trials, so the same job
-   always gets the same cut map. Keep searching runs the same engine in the worker on
-   fresh seeds with twice the trials, one sheet material at a time. A layout replaces
-   the one in use only if it needs fewer sheets, or the same sheets with a lower
-   balanced score. Because a better map changes the offcuts the next material can use,
-   the job is rebuilt after each find before the search moves on. Found layouts are
-   saved with the job; Reset goes back to the standard search. */
+/* Keep searching is scoped to one material request. Fresh seeds explore alternatives;
+   a candidate is offered only when it uses fewer sheets, or the same sheets without
+   increasing cuts or fence changes. The user chooses before it replaces the map. */
 const SEARCH_ROUNDS=20;
-const SEARCH={on:false,token:0,round:0,step:0,steps:0,found:0,startSheets:0,msg:'',offer:null};
+const SEARCH={on:false,token:0,round:0,sig:'',material:'',msg:'',offer:null};
 /* Never call a same-sheet result "better" if it increases either shop-time measure.
    The user chooses before any qualifying candidate replaces the current map. */
 const nestBetter=(a,b)=>!!a&&!!b&&(a.sheets<b.sheets||(a.sheets===b.sheets&&
   a.cuts<=b.cuts&&a.fenceChanges<=b.fenceChanges&&
   (a.cuts<b.cuts||a.fenceChanges<b.fenceChanges||a.raw<b.raw-1e-6)));
-const sheetTotal=()=>RESULT?RESULT.groups.reduce((n,g)=>n+(g.nest?g.nest.sheets:0),0):0;
 function stopSearch(){
   if(!SEARCH.on) return;
   SEARCH.on=false; SEARCH.token++;
   NESTER.stop();
   paintSearch();
 }
-function searchBar(){
-  if(!NESTER.ok()) return '';
-  return '<div class="searchbar">'+searchBarInner()+'</div>';
+function searchBar(sig,material){
+  if(!sig||!NESTER.ok()) return '';
+  return '<div class="searchbar" data-search-sig="'+escAttr(sig)+'" data-search-material="'+escAttr(material)+'">'+searchBarInner(sig,material)+'</div>';
 }
-function searchBarInner(){
-  const kept=Object.keys(JOB_NEST_BEST).length;
-  if(SEARCH.offer){
+function searchBarInner(sig,material){
+  const active=SEARCH.sig===sig;
+  const kept=!!JOB_NEST_BEST[sig];
+  if(active&&SEARCH.offer){
     const a=SEARCH.offer.before.score,b=SEARCH.offer.after.score;
     const line=x=>x.sheets+' sheets · '+x.cuts+' cuts · '+x.fenceChanges+' fence changes · '+(x.scrapArea/144).toFixed(1)+' sq ft scrap';
-    return '<div class="stext"><b>A different layout was found.</b> Compare it before changing the cut map.</div>'+ 
+    return '<div class="stext"><b>A different '+esc(material)+' layout was found.</b> Compare it before changing this material.</div>'+ 
       '<div class="searchcompare"><div><b>Current</b>'+line(a)+'</div><div><b>Candidate</b>'+line(b)+'</div></div>'+ 
       '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="accept">Use candidate</button>'+ 
       '<button type="button" class="btn-ghost btn-sm" data-s="reject">Keep current</button></div>';
   }
-  if(SEARCH.on)
-    return '<div class="stext"><b>Searching</b> · round '+SEARCH.round+' of '+SEARCH.rounds+
-      ', layout '+SEARCH.step+' of '+SEARCH.steps+' · '+
-      (SEARCH.found?SEARCH.found+' better found, now '+sheetTotal()+' sheet'+(sheetTotal()===1?'':'s')+
-        ' (was '+SEARCH.startSheets+')':'nothing better yet')+'</div>'+
-      '<div class="sbar"><i style="width:'+Math.round(100*((SEARCH.round-1)*SEARCH.steps+SEARCH.step)/
-        Math.max(1,SEARCH.rounds*SEARCH.steps))+'%"></i></div>'+
+  if(SEARCH.on&&active)
+    return '<div class="stext"><b>Searching '+esc(material)+'</b> · round '+SEARCH.round+' of '+SEARCH.rounds+' · nothing better yet</div>'+ 
+      '<div class="sbar"><i style="width:'+Math.round(100*SEARCH.round/Math.max(1,SEARCH.rounds))+'%"></i></div>'+ 
       '<div class="qbtns"><button type="button" class="btn-ghost btn-sm" data-s="stop">Stop</button></div>';
-  return '<div class="stext">'+(SEARCH.msg?esc(SEARCH.msg)+' ':'')+
-      (kept?'This job is using layouts from a deeper search. ':'Search longer for a cut map with fewer sheets or a tidier layout. ')+
-      'The screen stays usable while it runs.</div>'+
-    '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="go">Keep searching</button>'+
+  if(SEARCH.on)
+    return '<div class="stext">Searching '+esc(SEARCH.material)+'. Finish or stop that search before starting '+esc(material)+'.</div>';
+  return '<div class="stext">'+(active&&SEARCH.msg?esc(SEARCH.msg)+' ':'')+
+      (kept?esc(material)+' is using a layout from a deeper search. ':'Search longer for a better '+esc(material)+' layout. ')+
+      'Only this material will be searched.</div>'+ 
+    '<div class="qbtns"><button type="button" class="btn-primary btn-sm" data-s="go" data-sig="'+escAttr(sig)+'">Keep searching '+esc(material)+'</button>'+ 
       (kept?'<button type="button" class="btn-ghost btn-sm" data-s="reset">Reset to standard search</button>':'')+'</div>';
 }
 function paintSearch(){
-  for(const el of document.querySelectorAll('#resBody .searchbar')) el.innerHTML=searchBarInner();
+  for(const el of document.querySelectorAll('#resBody .searchbar'))
+    el.innerHTML=searchBarInner(el.dataset.searchSig,el.dataset.searchMaterial);
 }
 /* Resolves once the build in progress has finished (or failed). */
 function afterBuild(){
   return new Promise(res=>{ const tick=()=>BUILD_PENDING?setTimeout(tick,60):res(); tick(); });
 }
-async function keepSearching(){
-  if(SEARCH.on||!RESULT||!LAST_NEST_REQS||!LAST_NEST_REQS.size) return;
+async function keepSearching(sig){
+  if(SEARCH.on||!RESULT||!LAST_NEST_REQS||!sig) return;
   if(!NESTER.ok()) return toast('Keep searching needs background nesting, which this browser has blocked.');
+  const req=LAST_NEST_REQS.get(sig);
+  if(!req) return toast('Rebuild this cut map before searching it again.');
   const token=++SEARCH.token;
-  Object.assign(SEARCH,{on:true,round:0,rounds:SEARCH_ROUNDS,step:0,steps:LAST_NEST_REQS.size,found:0,
-                        startSheets:sheetTotal(),msg:'',offer:null});
+  Object.assign(SEARCH,{on:true,round:0,rounds:SEARCH_ROUNDS,sig,material:req.material||'this material',msg:'',offer:null});
   paintSearch();
   const live=()=>SEARCH.on&&token===SEARCH.token;
   try{
     for(let round=1;round<=SEARCH_ROUNDS&&live();round++){
       SEARCH.round=round;
-      const reqs=[...LAST_NEST_REQS.values()];
-      SEARCH.steps=reqs.length;
-      for(let i=0;i<reqs.length&&live();i++){
-        const req=reqs[i];
-        SEARCH.step=i+1; paintSearch();
-        const cur=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
-        if(!cur||cur.error||!cur.score) continue;
-        const seed=(Math.imul(round,2654435761)^parseInt(req.sig.slice(0,8),16))>>>0;
-        const d=await NESTER.run({...req,trials:req.trials*2},seed);
-        if(!live()) break;
-        if(d.ok&&validNestResult(d.res,req)&&nestBetter(d.res.score,cur.score)){
-          SEARCH.offer={sig:req.sig,before:cur,after:d.res};
-          SEARCH.on=false;
-          paintSearch();
-          return;
-        }
+      paintSearch();
+      const cur=JOB_NEST_BEST[req.sig]||NEST_MEMO.get(req.sig);
+      if(!cur||cur.error||!cur.score) break;
+      const seed=(Math.imul(round,2654435761)^parseInt(req.sig.slice(0,8),16))>>>0;
+      const d=await NESTER.run({...req,trials:req.trials*2},seed);
+      if(!live()) break;
+      if(d.ok&&validNestResult(d.res,req)&&nestBetter(d.res.score,cur.score)){
+        SEARCH.offer={sig:req.sig,before:cur,after:d.res};
+        SEARCH.on=false;
+        paintSearch();
+        return;
       }
     }
-    if(live()) SEARCH.msg=SEARCH.found
-      ?'Found '+SEARCH.found+' better layout'+(SEARCH.found>1?'s':'')+': '+sheetTotal()+' sheets, was '+SEARCH.startSheets+'.'
-      :'Searched '+SEARCH_ROUNDS+' rounds and the standard layouts held.';
+    if(live()) SEARCH.msg='Searched '+SEARCH_ROUNDS+' rounds for '+SEARCH.material+' and the current layout held.';
   }catch(e){
     if(e!==NEST_STOPPED){ SEARCH.msg='The search stopped: '+(e&&e.message||e)+'.'; }
   }finally{
-    if(token===SEARCH.token){ SEARCH.on=false; paintSearch(); if(SEARCH.found) toast(SEARCH.msg||'Search finished.',true); }
+    if(token===SEARCH.token){ SEARCH.on=false; paintSearch(); }
   }
 }
 
 function acceptSearchOffer(){
   const o=SEARCH.offer; if(!o) return;
-  JOB_NEST_BEST[o.sig]=o.after; SEARCH.offer=null; SEARCH.msg='Candidate applied.';
+  JOB_NEST_BEST[o.sig]=o.after; SEARCH.offer=null; SEARCH.msg=SEARCH.material+' candidate applied.';
   build({quiet:true});
 }
 function rejectSearchOffer(){
   if(!SEARCH.offer) return;
-  SEARCH.offer=null; SEARCH.msg='Current layout kept.'; paintSearch();
+  SEARCH.offer=null; SEARCH.msg='Current '+SEARCH.material+' layout kept.'; paintSearch();
 }
 
 function packMaterial(material,matParts,stockOffcuts){
@@ -2442,9 +2430,11 @@ function packMaterial(material,matParts,stockOffcuts){
       remaining=remaining.filter(p=>!done.has(p.id));
     }
   }
-  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[];
+  let sheets=[],strategy=null,metrics=null,unplaced=[...oversize],openSheets=0,longNames=[],requestSig=null;
   if(remaining.length){
-    const res=nestFor(remaining,cutTrials(remaining.length));
+    const trials=cutTrials(remaining.length);
+    const res=nestFor(remaining,trials,material);
+    requestSig=nestReq(remaining,trials,material).sig;
     ({sheets,metrics,openSheets,longNames}=res);
     strategy=res.label;
     for(const sh of sheets) for(const p of sh)
@@ -2467,7 +2457,7 @@ function packMaterial(material,matParts,stockOffcuts){
       label:a.runs>1?`Sheets ${from}\u2013${upTo}/${sheets.length} \u00b7 run this layout \u00d7${a.runs}`:`Sheet ${from}/${sheets.length}`};
   }).concat(offcutPanels.map(([pl,w,l])=>({placements:pl,w,l,label:`Offcut ${w}x${l}`})));
   return {material,panels,sheets:sheets.length,offcutsUsed:used,strategy,metrics,newOffcuts,unplaced,
-          openSheets,longNames};
+          openSheets,longNames,requestSig};
 }
 
 /* ---- boards ----
@@ -4893,6 +4883,7 @@ function viewMap(body,sum,g){
         (m.offcutsUsed?' + '+m.offcutsUsed+' offcut(s)':'')+'</h3>';
       for(const p of m.panels)
         h+='<div class="sheetwrap sheetpanel"><h3>'+esc(p.label)+'</h3>'+sheetSVG(p)+'</div>';
+      if(m.requestSig) h+=searchBar(m.requestSig,m.material);
     }
   }
   if(g.boards&&g.boards.panels.length){
@@ -4929,7 +4920,6 @@ function viewMap(body,sum,g){
     });
     h+='</div>';
   }
-  if(N&&N.materials.some(m=>m.sheets>0)) h+=searchBar();
   body.innerHTML=h||'<div class="hint">Nothing to cut in this group.</div>';
 }
 
@@ -7388,9 +7378,15 @@ document.getElementById('resBody').addEventListener('click',e=>{
   if(q) return quoteAction(q.dataset.q);
   const sb=e.target.closest('[data-s]');
   if(!sb) return;
-  if(sb.dataset.s==='go') keepSearching();
-  else if(sb.dataset.s==='stop'){ stopSearch(); SEARCH.msg='Stopped. Anything better it found is kept.'; paintSearch(); }
-  else if(sb.dataset.s==='reset'){ JOB_NEST_BEST={}; SEARCH.msg=''; build({quiet:true}); }
+  const bar=sb.closest('.searchbar');
+  const sig=sb.dataset.sig||(bar&&bar.dataset.searchSig)||'';
+  if(sb.dataset.s==='go') keepSearching(sig);
+  else if(sb.dataset.s==='stop'){ const material=SEARCH.material; stopSearch(); SEARCH.msg='Stopped searching '+material+'.'; paintSearch(); }
+  else if(sb.dataset.s==='reset'){
+    if(sig) delete JOB_NEST_BEST[sig];
+    SEARCH.sig=sig; SEARCH.material=(bar&&bar.dataset.searchMaterial)||SEARCH.material; SEARCH.msg='Standard layout restored.';
+    build({quiet:true});
+  }
   else if(sb.dataset.s==='accept') acceptSearchOffer();
   else if(sb.dataset.s==='reject') rejectSearchOffer();
 });
